@@ -1,0 +1,6 @@
+{
+  "name": "CGPA Booster - Slide Study Engine",
+  "description": "Upload lecture slides to generate 40 strictly-grounded practice questions, 3D flip flashcards, and topic summaries per course week.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

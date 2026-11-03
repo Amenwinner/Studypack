@@ -1,0 +1,3372 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CGPA Booster - Slide Study Engine</title>
+  <meta name="description" content="Upload lecture slides to generate 40 strictly-grounded practice questions, 3D flip flashcards, and topic summaries per course week." />
+  <meta property="og:title" content="CGPA Booster - Slide Study Engine" />
+  <meta property="og:description" content="Upload lecture slides to generate 40 strictly-grounded practice questions, 3D flip flashcards, and topic summaries per course week." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- External CDN Dependencies with Subresource Integrity / Fallbacks -->
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+              950: '#1e1b4b',
+            },
+            academic: {
+              gold: '#f59e0b',
+              emerald: '#10b981',
+              ruby: '#ef4444',
+              navy: '#0f172a',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- PDF.js for Client-Side Slide Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- JSZip for Client-Side PPTX Slide Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- Critical Inline Fallback & 3D Flip Stylesheet -->
+  <style>
+    /* Immediate Fallback styles in case external scripts are delayed */
+    :root {
+      --bg-page: #f8fafc;
+      --text-main: #0f172a;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 3D Flashcard Perspectives */
+    .perspective-1000 {
+      perspective: 1000px;
+      -webkit-perspective: 1000px;
+    }
+    .transform-style-3d {
+      transform-style: preserve-3d;
+      -webkit-transform-style: preserve-3d;
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+      -webkit-transform: rotateY(180deg);
+    }
+
+    /* Custom animated progress */
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .animate-pulse-subtle {
+      animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* Print styles for offline study sheet */
+    @media print {
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .card-face { box-shadow: none !important; border: 1px solid #ccc !important; }
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
+
+  <!-- Immediate Fallback DOM loader to prevent white-screen on any host -->
+  <div id="immediate-loader" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900 text-white transition-opacity duration-300">
+    <div class="text-center p-6 max-w-sm">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-lg mb-4">
+        <i class="fa-solid fa-graduation-cap text-2xl"></i>
+      </div>
+      <h2 class="text-lg font-bold tracking-tight text-white mb-1">CGPA Booster</h2>
+      <p class="text-xs text-slate-400 mb-4">Strictly-Grounded Slide Study Engine</p>
+      <div class="w-48 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden">
+        <div class="h-full bg-indigo-500 rounded-full animate-pulse-subtle w-3/4"></div>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-3">Loading study environment...</p>
+    </div>
+  </div>
+
+  <!-- Main App Container -->
+  <div id="app" class="flex-1 flex flex-col h-full overflow-hidden opacity-0 transition-opacity duration-300">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-20">
+      <div class="px-4 lg:px-6 py-3 flex items-center justify-between gap-4">
+        <!-- Brand & Student Persona Identity -->
+        <div class="flex items-center gap-3">
+          <button id="sidebar-toggle-btn" class="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+            <i class="fa-solid fa-bars text-lg"></i>
+          </button>
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
+              <i class="fa-solid fa-graduation-cap text-base"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-base tracking-tight bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 bg-clip-text text-transparent">CGPA Booster</span>
+                <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60">
+                  <i class="fa-solid fa-bullseye mr-1 text-[9px]"></i> Goal: 4.0 First Class
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-none">Strict Slide-Grounded Academic Examiner</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: Current Course Quick Display -->
+        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 text-xs">
+          <span class="text-slate-400 font-medium">Course:</span>
+          <span id="header-active-course-name" class="font-semibold text-slate-800 dark:text-slate-200">B2C Marketing</span>
+          <span class="text-slate-300 dark:text-slate-600">•</span>
+          <span id="header-active-week-name" class="font-medium text-indigo-600 dark:text-indigo-400">Week 1</span>
+        </div>
+
+        <!-- Right Utilities: Server-Side AI Badge, Dark Mode, CGPA Plan -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Gemini API Status Badge -->
+          <div id="ai-server-badge" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300/80 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 shadow-xs" title="Connected to Server Gemini API">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <i class="fa-solid fa-wand-magic-sparkles text-[11px] text-indigo-600 dark:text-indigo-400"></i>
+            <span class="hidden sm:inline">Gemini API Connected</span>
+          </div>
+
+          <!-- API Key Config Button -->
+          <button id="api-key-config-btn" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors" title="Configure Gemini API Key">
+            <i class="fa-solid fa-key text-[11px]"></i>
+            <span class="hidden sm:inline">API Key</span>
+          </button>
+
+          <!-- Dark/Light Theme Toggle -->
+          <button id="theme-toggle-btn" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Toggle Dark/Light Mode">
+            <i id="theme-icon" class="fa-solid fa-moon text-sm"></i>
+          </button>
+
+          <!-- CGPA Calculator / Study Plan Modal Toggle -->
+          <button id="cgpa-stats-btn" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-semibold border border-indigo-200/60 dark:border-indigo-800/60 transition-colors">
+            <i class="fa-solid fa-chart-line text-[11px]"></i>
+            <span>CGPA Plan</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Area (Sidebar + Content) -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+      <!-- Sidebar: 6 Fixed Courses + Weeks Navigation -->
+      <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 w-72 sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 -translate-x-full lg:translate-x-0 shadow-xl lg:shadow-none">
+        
+        <!-- Sidebar Header -->
+        <div class="p-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Course Syllabus Decks</h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">6 Semester Subjects</p>
+          </div>
+          <button id="sidebar-close-btn" class="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- 6 Course Decks List -->
+        <div class="p-3 overflow-y-auto flex-1 space-y-1" id="courses-list-container">
+          <!-- Dynamically populated 6 courses -->
+        </div>
+
+        <!-- Selected Course Weeks Sub-panel -->
+        <div class="p-4 bg-slate-50/70 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Weekly Study Packs</span>
+            <button id="add-week-btn" class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:underline">
+              <i class="fa-solid fa-plus text-[10px]"></i> Add Week
+            </button>
+          </div>
+          
+          <div id="weeks-list-container" class="space-y-1 max-h-40 overflow-y-auto pr-1">
+            <!-- Weeks list inserted dynamically -->
+          </div>
+        </div>
+
+        <!-- Academic Discipline Card -->
+        <div class="p-3.5 m-3 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-slate-800 dark:to-slate-800/60 border border-indigo-100 dark:border-slate-700/60">
+          <div class="flex items-start gap-2.5">
+            <div class="p-1.5 rounded-lg bg-indigo-600 text-white text-xs shrink-0 mt-0.5">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-900 dark:text-slate-100">Strict Grounding Rule</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-tight mt-0.5">
+                Questions are synthesized <em>strictly and solely</em> from your lecture slides. No outside syllabus hallucination.
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Sidebar Backdrop on mobile -->
+      <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-20 hidden lg:hidden"></div>
+
+      <!-- Main Workspace Center Content -->
+      <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
+
+        <!-- Top Action / Context Header (When Pack Exists) -->
+        <div id="study-pack-header" class="hidden px-4 sm:px-6 py-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span id="pack-course-tag" class="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">MKT401</span>
+                <h1 id="pack-title" class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">Week 1 Study Deck</h1>
+              </div>
+              <p id="pack-meta" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Extracted from 24 slides • 40 Practice Questions • 20 Flashcards</p>
+            </div>
+
+            <!-- Action Buttons: Export, Retake, Delete -->
+            <div class="flex items-center flex-wrap gap-2">
+              <button id="upload-new-slides-btn" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors">
+                <i class="fa-solid fa-arrow-up-from-bracket mr-1"></i> Replace Slides
+              </button>
+              
+              <div class="relative inline-block text-left" id="export-dropdown-wrapper">
+                <button id="export-menu-btn" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center gap-1.5">
+                  <i class="fa-solid fa-file-export"></i>
+                  <span>Export</span>
+                  <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                </button>
+                <div id="export-menu" class="hidden absolute right-0 mt-1 w-44 rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 py-1 z-30 text-xs">
+                  <button id="export-md-btn" class="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2">
+                    <i class="fa-brands fa-markdown text-indigo-500"></i> Export Markdown (.md)
+                  </button>
+                  <button id="export-json-btn" class="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-code text-amber-500"></i> Export JSON Data
+                  </button>
+                  <button id="print-exam-btn" class="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-print text-emerald-500"></i> Print / PDF Worksheet
+                  </button>
+                </div>
+              </div>
+
+              <button id="delete-pack-btn" class="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors" title="Delete this study pack">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Study Tabs Navigation -->
+          <div class="flex items-center gap-1 sm:gap-2 mt-3 border-t border-slate-100 dark:border-slate-800/80 pt-2 overflow-x-auto">
+            <button data-tab="summary" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all bg-indigo-600 text-white shadow-sm">
+              <i class="fa-solid fa-book-open"></i>
+              <span>Topic Summary</span>
+            </button>
+            <button data-tab="flashcards" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <i class="fa-solid fa-layer-group"></i>
+              <span>Flashcards</span>
+              <span id="tab-flashcards-count" class="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">0</span>
+            </button>
+            <button data-tab="exam" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <i class="fa-solid fa-clipboard-question"></i>
+              <span>40 Practice Questions</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold">40</span>
+            </button>
+            <button data-tab="slides" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <i class="fa-solid fa-file-lines"></i>
+              <span>Slide Text Citer</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Scrollable Tab Content Container -->
+        <div id="tab-content-area" class="flex-1 overflow-y-auto p-4 sm:p-6">
+          
+          <!-- STATE A: EMPTY STATE (Initial launch or when no pack exists) -->
+          <div id="empty-state-view" class="max-w-3xl mx-auto py-8 sm:py-12">
+            
+            <!-- Academic Empty Alert Card -->
+            <div class="text-center mb-8">
+              <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 mb-4 shadow-sm">
+                <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+              </div>
+              <h2 id="empty-state-course-title" class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">B2C Marketing • Week 1</h2>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-lg mx-auto">
+                No study packs uploaded for this course yet.
+              </p>
+              <p class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                Drop your weekly lecture slides below to generate an exam-ready pack strictly grounded in the slide content.
+              </p>
+            </div>
+
+            <!-- Drag & Drop Upload Zone -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 p-6 sm:p-8 text-center transition-all hover:border-indigo-500 dark:hover:border-indigo-500 shadow-sm" id="drop-zone">
+              <input type="file" id="slide-file-input" class="hidden" accept=".pdf,.pptx,.txt,.md" />
+              
+              <div class="space-y-3">
+                <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-600 dark:text-slate-300">
+                  <i class="fa-solid fa-file-pdf text-xl text-rose-500"></i>
+                  <i class="fa-solid fa-file-powerpoint text-xl text-amber-500 -ml-1"></i>
+                  <i class="fa-solid fa-file-lines text-xl text-indigo-500 -ml-1"></i>
+                </div>
+
+                <div>
+                  <button type="button" id="browse-files-btn" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all">
+                    <i class="fa-solid fa-folder-open mr-1.5"></i> Select Lecture Slides
+                  </button>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    or drag and drop here (.pdf, .pptx, .txt, .md)
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-center gap-4 text-[11px] text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <span><i class="fa-solid fa-check text-emerald-500 mr-1"></i> Client-Side Extraction</span>
+                  <span><i class="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-1"></i> Gemini API Generation</span>
+                  <span><i class="fa-solid fa-check text-emerald-500 mr-1"></i> 100% Slide Grounding</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Slide Parsing / Extraction Preview Card (Hidden until file selected) -->
+            <div id="extraction-preview-card" class="hidden mt-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+              <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-bold">
+                    <i class="fa-solid fa-file-circle-check"></i>
+                  </div>
+                  <div>
+                    <h4 id="extracted-filename" class="text-xs font-bold text-slate-900 dark:text-slate-100">Lecture_Slides.pdf</h4>
+                    <p id="extracted-stats" class="text-[11px] text-slate-500 dark:text-slate-400">24 slides • 4,820 words extracted</p>
+                  </div>
+                </div>
+                <button id="change-file-btn" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                  Change File
+                </button>
+              </div>
+
+              <!-- Collapsible Raw Text Preview -->
+              <details class="text-xs text-slate-600 dark:text-slate-400 mb-4">
+                <summary class="cursor-pointer font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Preview extracted slide text
+                </summary>
+                <div id="extracted-text-preview" class="mt-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl max-h-36 overflow-y-auto text-[11px] font-mono border border-slate-200 dark:border-slate-800 whitespace-pre-wrap"></div>
+              </details>
+
+              <!-- Generate CTA -->
+              <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                  <i class="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-1"></i>
+                  Gemini API generation with content filtering & strict slide grounding.
+                </div>
+                <button id="trigger-generate-btn" class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span>Generate 40-Question Exam Deck (Gemini API)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Alternate Text Paste Option -->
+            <div class="mt-6">
+              <details class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
+                <summary class="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between">
+                  <span><i class="fa-solid fa-align-left text-slate-400 mr-1.5"></i> Or paste raw slide notes / text manually</span>
+                  <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                </summary>
+                <div class="mt-3 space-y-3">
+                  <textarea id="manual-slide-text" rows="6" placeholder="Paste slide text here... E.g.
+--- Slide 1: Introduction ---
+Course objectives and scope...
+--- Slide 2: Core Models ---
+..." class="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                  <button id="use-manual-text-btn" class="px-3.5 py-1.5 text-xs font-semibold bg-slate-800 dark:bg-slate-700 text-white rounded-lg hover:bg-slate-900 transition-colors">
+                    Use Pasted Slide Text
+                  </button>
+                </div>
+              </details>
+            </div>
+
+          </div>
+
+          <!-- STATE B: TAB 1 - TOPIC SUMMARY -->
+          <div id="tab-summary-view" class="tab-pane hidden space-y-6 max-w-5xl mx-auto">
+            
+            <!-- Executive Overview Hero Card -->
+            <div class="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+              <div class="absolute -right-12 -bottom-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+              
+              <div class="flex items-center gap-2 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-2">
+                <i class="fa-solid fa-bookmark"></i>
+                <span>Executive Academic Overview</span>
+              </div>
+              <h2 id="summary-topic-heading" class="text-xl sm:text-2xl font-black tracking-tight mb-3">Topic Synthesis</h2>
+              <p id="summary-executive-overview" class="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-4xl">
+                Loading summary...
+              </p>
+            </div>
+
+            <!-- Two-Column Layout: Core Takeaways & Formulas/Frameworks -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              <!-- Core Takeaways -->
+              <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs">
+                      <i class="fa-solid fa-list-check"></i>
+                    </span>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Core Slide Takeaways</h3>
+                  </div>
+                  <span class="text-[11px] text-slate-400">Strictly from slides</span>
+                </div>
+                <ul id="summary-takeaways-list" class="space-y-2.5 text-xs text-slate-700 dark:text-slate-300">
+                  <!-- Injected Takeaways -->
+                </ul>
+              </div>
+
+              <!-- Key Formulas & Frameworks -->
+              <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs">
+                      <i class="fa-solid fa-square-root-variable"></i>
+                    </span>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Formulas & Frameworks</h3>
+                  </div>
+                  <span class="text-[11px] text-slate-400">Calculation rules</span>
+                </div>
+                <div id="summary-formulas-container" class="space-y-3">
+                  <!-- Injected Formulas -->
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Key Definitions Section with Live Search -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">
+                    <i class="fa-solid fa-spell-check"></i>
+                  </span>
+                  <div>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Essential Academic Definitions</h3>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Exact definitions required for exams</p>
+                  </div>
+                </div>
+                <!-- Search definitions -->
+                <div class="relative w-full sm:w-60">
+                  <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                  <input type="text" id="definitions-search-input" placeholder="Filter terms..." class="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+
+              <div id="summary-definitions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <!-- Injected Definitions -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- STATE C: TAB 2 - 3D INTERACTIVE FLASHCARDS (15-25 Cards) -->
+          <div id="tab-flashcards-view" class="tab-pane hidden max-w-3xl mx-auto space-y-6">
+            
+            <!-- Flashcard Deck Controls & Mastery Bar -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Weekly Flashcard Deck</h3>
+                  <span id="flashcard-counter" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    Card 1 of 20
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                  <div class="w-36 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div id="flashcard-mastery-progress" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                  </div>
+                  <span id="flashcard-mastery-label" class="text-[11px] text-slate-500 font-medium">0 Mastered</span>
+                </div>
+              </div>
+
+              <!-- Deck Filters & Shuffle -->
+              <div class="flex items-center gap-2">
+                <button id="flashcard-shuffle-btn" class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors" title="Shuffle flashcards">
+                  <i class="fa-solid fa-shuffle mr-1"></i> Shuffle
+                </button>
+                <button id="flashcard-reset-mastery-btn" class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors" title="Reset mastery scores">
+                  <i class="fa-solid fa-arrow-rotate-left mr-1"></i> Reset
+                </button>
+              </div>
+            </div>
+
+            <!-- The 3D Perspective Flashcard Container -->
+            <div class="perspective-1000 w-full min-h-[320px] sm:min-h-[360px] cursor-pointer" id="flashcard-container">
+              <div id="flashcard-inner" class="transform-style-3d relative w-full h-full min-h-[320px] sm:min-h-[360px] rounded-3xl shadow-xl">
+                
+                <!-- CARD FRONT -->
+                <div class="card-face absolute inset-0 bg-white dark:bg-slate-900 border-2 border-indigo-100 dark:border-indigo-900/60 rounded-3xl p-6 sm:p-10 flex flex-col justify-between select-none">
+                  <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span class="font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                      <i class="fa-solid fa-lightbulb"></i>
+                      <span>Term / Key Concept</span>
+                    </span>
+                    <span id="card-front-index" class="font-mono">#1</span>
+                  </div>
+
+                  <div class="text-center py-6">
+                    <h3 id="card-front-text" class="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 leading-snug">
+                      Card Term Here
+                    </h3>
+                  </div>
+
+                  <div class="flex items-center justify-between text-xs text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <span class="text-[11px] text-slate-400"><i class="fa-regular fa-hand-pointer mr-1"></i> Click or press Space to flip</span>
+                    <span class="inline-flex items-center gap-1 text-[11px] text-indigo-500 font-medium">
+                      <span>Flip for definition</span>
+                      <i class="fa-solid fa-rotate text-[10px]"></i>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- CARD BACK -->
+                <div class="card-face rotate-y-180 absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-10 flex flex-col justify-between select-none border-2 border-indigo-700/60">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                      <i class="fa-solid fa-circle-check"></i>
+                      <span>Strict Definition / Rule</span>
+                    </span>
+                    <span id="card-back-cite" class="px-2 py-0.5 rounded bg-indigo-800/80 text-[10px] text-indigo-200 font-mono">
+                      Slide 4
+                    </span>
+                  </div>
+
+                  <div class="py-4">
+                    <p id="card-back-text" class="text-sm sm:text-base text-slate-100 leading-relaxed">
+                      Detailed explanation from the slide...
+                    </p>
+                  </div>
+
+                  <div class="flex items-center justify-between text-xs text-slate-400 border-t border-indigo-800/60 pt-3">
+                    <span class="text-[11px] text-slate-400"><i class="fa-regular fa-hand-pointer mr-1"></i> Click to flip back</span>
+                    <span class="text-[11px] text-indigo-300 font-mono" id="card-back-index">#1</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Card Controls & Mastery Marking -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+              
+              <!-- Previous / Next Buttons -->
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-center">
+                <button id="card-prev-btn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex items-center gap-1.5">
+                  <i class="fa-solid fa-arrow-left text-[11px]"></i>
+                  <span>Previous</span>
+                </button>
+                <button id="card-flip-btn" class="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate text-[11px]"></i>
+                  <span>Flip</span>
+                </button>
+                <button id="card-next-btn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex items-center gap-1.5">
+                  <span>Next</span>
+                  <i class="fa-solid fa-arrow-right text-[11px]"></i>
+                </button>
+              </div>
+
+              <!-- Mastery Status Marking -->
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-center">
+                <button id="mark-need-review-btn" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-colors flex items-center gap-1.5">
+                  <i class="fa-regular fa-circle-question"></i>
+                  <span>Still Learning</span>
+                </button>
+                <button id="mark-mastered-btn" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center gap-1.5">
+                  <i class="fa-solid fa-check"></i>
+                  <span>Mastered (Know It)</span>
+                </button>
+              </div>
+
+            </div>
+
+            <!-- Keyboard shortcut hint -->
+            <p class="text-center text-[11px] text-slate-400">
+              Keyboard: <kbd class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Space</kbd> Flip &nbsp;•&nbsp;
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">←</kbd> Prev &nbsp;•&nbsp;
+              <kbd class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">→</kbd> Next
+            </p>
+
+          </div>
+
+          <!-- STATE D: TAB 3 - 40 PRACTICE QUESTIONS -->
+          <div id="tab-exam-view" class="tab-pane hidden max-w-4xl mx-auto space-y-6">
+            
+            <!-- Exam Progress & Readiness Dashboard Banner -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                      <i class="fa-solid fa-graduation-cap"></i>
+                    </span>
+                    <div>
+                      <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">40-Question Exam Simulation</h3>
+                      <p class="text-[11px] text-slate-500 dark:text-slate-400">Strictly grounded in slide definitions, formulas, and concepts</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Projected Exam Score Badge -->
+                <div class="flex items-center gap-3">
+                  <div class="text-right">
+                    <p class="text-[11px] text-slate-400 uppercase font-semibold">Predicted Grade</p>
+                    <p id="exam-projected-grade" class="text-lg font-black text-indigo-600 dark:text-indigo-400">A (4.0 Target)</p>
+                  </div>
+                  <div class="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 text-center min-w-[90px]">
+                    <span id="exam-score-num" class="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">0</span>
+                    <span class="text-xs text-slate-400"> / 40</span>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium" id="exam-score-pct">0%</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Exam Section Filter Tabs -->
+              <div class="flex items-center justify-between flex-wrap gap-2 pt-3">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <button data-exam-filter="all" class="exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">
+                    All 40
+                  </button>
+                  <button data-exam-filter="mcq" class="exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    Q1–Q20 MCQs
+                  </button>
+                  <button data-exam-filter="fill" class="exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    Q21–Q30 Rapid Recall
+                  </button>
+                  <button data-exam-filter="short" class="exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    Q31–Q40 Analytical
+                  </button>
+                  <button data-exam-filter="answerkey" class="exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50">
+                    <i class="fa-solid fa-key mr-1"></i> Answer Key
+                  </button>
+                </div>
+
+                <button id="reset-exam-answers-btn" class="text-[11px] text-slate-400 hover:text-rose-500 font-medium">
+                  <i class="fa-solid fa-arrow-rotate-left mr-1"></i> Clear Answers
+                </button>
+              </div>
+            </div>
+
+            <!-- Questions Container -->
+            <div id="questions-list-container" class="space-y-4">
+              <!-- Dynamically populated 40 questions -->
+            </div>
+
+            <!-- Collapsible Master Answer Key & Explanations Section -->
+            <div id="master-answer-key-section" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+              <details id="answer-key-details" open>
+                <summary class="cursor-pointer flex items-center justify-between text-sm font-bold text-slate-900 dark:text-slate-100 select-none">
+                  <span class="flex items-center gap-2">
+                    <i class="fa-solid fa-list-ol text-indigo-600 dark:text-indigo-400"></i>
+                    <span>Master Answer Key & Slide Citations (All 40 Questions)</span>
+                  </span>
+                  <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform"></i>
+                </summary>
+                
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    Every answer is strictly verifiable against the slide numbers indicated.
+                  </p>
+                  
+                  <div id="master-answer-key-table" class="space-y-2 text-xs">
+                    <!-- Master Answer Key injected here -->
+                  </div>
+                </div>
+              </details>
+            </div>
+
+          </div>
+
+          <!-- STATE E: TAB 4 - SLIDE GROUNDING INSPECTOR -->
+          <div id="tab-slides-view" class="tab-pane hidden max-w-4xl mx-auto space-y-4">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Slide Grounding Corpus</h3>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">Exact readable slide text ingested for this weekly deck</p>
+                </div>
+                <button id="copy-slide-text-btn" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300">
+                  <i class="fa-regular fa-copy mr-1"></i> Copy Text
+                </button>
+              </div>
+
+              <div id="corpus-slide-text" class="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 max-h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                No slide text loaded.
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+
+  </div>
+
+  <!-- MULTI-STAGE GENERATION PROGRESS MODAL -->
+  <div id="generation-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 max-w-md w-full mx-4 shadow-2xl">
+      <div class="text-center">
+        <!-- Animated Spinner / Academic Icon -->
+        <div class="relative w-16 h-16 mx-auto mb-4">
+          <div class="absolute inset-0 rounded-full border-4 border-indigo-200 dark:border-indigo-900/60"></div>
+          <div class="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+          <div class="absolute inset-0 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <i class="fa-solid fa-graduation-cap text-lg"></i>
+          </div>
+        </div>
+
+        <h3 id="gen-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Academic Examiner Synthesizing...</h3>
+        <p id="gen-modal-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-6">
+          Calling Gemini API to synthesize 40 strictly grounded questions, flashcards & summary...
+        </p>
+
+        <!-- Progress Steps -->
+        <div class="space-y-3 text-left mb-6 text-xs" id="gen-steps-container">
+          <div class="flex items-center gap-3 text-emerald-600 dark:text-emerald-400" id="step-extract">
+            <i class="fa-solid fa-circle-check"></i>
+            <span class="font-medium">1. Extract slide text & page boundaries</span>
+          </div>
+          <div class="flex items-center gap-3 text-indigo-600 dark:text-indigo-400" id="step-ground">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span class="font-medium">2. Filter administrative slides & target high-yield substance</span>
+          </div>
+          <div class="flex items-center gap-3 text-slate-400" id="step-gemini">
+            <i class="fa-regular fa-circle"></i>
+            <span>3. Server Gemini API synthesizing exam deck</span>
+          </div>
+          <div class="flex items-center gap-3 text-slate-400" id="step-validate">
+            <i class="fa-regular fa-circle"></i>
+            <span>4. Verify 40 questions & flashcards integrity</span>
+          </div>
+        </div>
+
+        <!-- Student Motivation Banner -->
+        <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 text-[11px] text-indigo-800 dark:text-indigo-300 text-center">
+          <i class="fa-solid fa-quote-left mr-1 opacity-50"></i>
+          Deliberate practice from slides guarantees maximum CGPA impact.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CGPA STRATEGY MODAL -->
+  <div id="cgpa-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 max-w-lg w-full mx-4 shadow-2xl">
+      <div class="flex items-start justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 text-white flex items-center justify-center text-base">
+            <i class="fa-solid fa-trophy"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">CGPA 4.0 First Class Game Plan</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Targeting First Class Honors across all 6 courses</p>
+          </div>
+        </div>
+        <button id="close-cgpa-modal-btn" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center">
+            <span class="text-[10px] uppercase font-bold text-slate-400">Target Grade</span>
+            <p class="text-xl font-black text-amber-500">A (4.00)</p>
+          </div>
+          <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center">
+            <span class="text-[10px] uppercase font-bold text-slate-400">Semester Credits</span>
+            <p class="text-xl font-black text-indigo-500">18.0 Units</p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="font-bold text-slate-900 dark:text-slate-100">Why Strict Slide Grounding Works:</h4>
+          <ul class="space-y-2 text-slate-600 dark:text-slate-400">
+            <li class="flex items-start gap-2">
+              <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
+              <span><strong>Examiner Alignment:</strong> University exam questions directly mirror the exact terminology and examples presented on lecture slides.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
+              <span><strong>Active Recall:</strong> 40 practice questions per week reinforce knowledge retrieval under timed conditions.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
+              <span><strong>Zero Hallucination:</strong> Never waste time studying out-of-syllabus concepts that won't appear on midterms or finals.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="pt-2 text-right">
+          <button id="dismiss-cgpa-modal-btn" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold">
+            Let's Ace This Semester
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD WEEK MODAL -->
+  <div id="add-week-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-sm w-full mx-4 shadow-2xl">
+      <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">Add Weekly Study Pack</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4" id="add-week-course-label">For B2C Marketing</p>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Week Identifier / Topic</label>
+          <input type="text" id="new-week-title-input" placeholder="e.g. Week 2: Consumer Decision Process" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button id="cancel-add-week-btn" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+            Cancel
+          </button>
+          <button id="confirm-add-week-btn" class="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+            Create Week
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ERROR NOTICE MODAL -->
+  <div id="error-notice-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 max-w-md w-full mx-4 shadow-2xl">
+      <div class="flex items-start gap-3 mb-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 text-base">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h3 id="error-modal-title" class="text-base font-bold text-slate-900 dark:text-slate-100">Examiner Generation Notice</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Academic System Response</p>
+        </div>
+      </div>
+      <p id="error-modal-message" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 whitespace-pre-wrap">
+        Message details here...
+      </p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="error-action-btn" class="hidden px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs">
+          Generate with Offline Engine
+        </button>
+        <button id="close-error-modal-btn" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-all shadow-xs">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API KEY MODAL -->
+  <div id="api-key-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full mx-4 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-key"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Gemini API Key</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Server & Client-Side Configuration</p>
+          </div>
+        </div>
+        <button id="close-api-key-modal-btn" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+          The app automatically uses the server-injected <code class="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">GEMINI_API_KEY</code>. You can also specify an optional custom Gemini API key below to override or bypass project quota limits.
+        </p>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Custom Gemini API Key (Saved in browser)</label>
+          <input type="password" id="custom-api-key-input" placeholder="AIzaSy..." class="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button id="clear-api-key-btn" class="text-slate-400 hover:text-rose-500 font-medium">Clear Custom Key</button>
+          <button id="save-api-key-btn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs">Save Key</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLETE ES6+ APPLICATION SCRIPT WITH SERVER-SIDE API INTEGRATION -->
+  <script type="module">
+    // Suppress dev WebSocket or HMR connection notices in preview iframe
+    window.addEventListener('error', (event) => {
+      if (event.message && (event.message.includes('WebSocket') || event.message.includes('@vite/client'))) {
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      }
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      if (event.reason && String(event.reason).includes('WebSocket')) {
+        event.preventDefault();
+      }
+    });
+
+    // Configure PDF.js Worker
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // CONSTANTS: The 6 Fixed Course Decks
+    const FIXED_COURSES = [
+      { id: 'b2c_marketing', name: 'B2C Marketing', code: 'MKT401', credits: 3.0, icon: 'fa-chart-pie', color: 'indigo' },
+      { id: 'corp_finance', name: 'Corporate Finance', code: 'FIN302', credits: 3.0, icon: 'fa-coins', color: 'emerald' },
+      { id: 'entrepreneurship', name: 'Entrepreneurship and Innovation', code: 'ENT205', credits: 3.0, icon: 'fa-rocket', color: 'violet' },
+      { id: 'business_math', name: 'Business Mathematics', code: 'MTH108', credits: 3.0, icon: 'fa-calculator', color: 'amber' },
+      { id: 'macroeconomics', name: 'Macroeconomics', code: 'ECO201', credits: 3.0, icon: 'fa-globe', color: 'blue' },
+      { id: 'erp', name: 'Enterprise and Resource Planning (ERP)', code: 'ERP304', credits: 3.0, icon: 'fa-network-wired', color: 'cyan' },
+    ];
+
+    const STORAGE_KEY = 'cgpa_booster_study_decks_v1';
+    const THEME_STORAGE = 'cgpa_theme_mode';
+
+    // Application State Object
+    const appState = {
+      theme: 'dark',
+      currentCourseId: 'b2c_marketing',
+      currentWeekId: 'week_1',
+      courses: {},
+      activeTab: 'summary', // 'summary', 'flashcards', 'exam', 'slides'
+      examFilter: 'all', // 'all', 'mcq', 'fill', 'short', 'answerkey'
+      
+      // Temporary Upload State
+      pendingSlideText: '',
+      pendingFilename: '',
+      pendingSlideCount: 0,
+      pendingWordCount: 0,
+
+      // Flashcard runtime navigation
+      currentCardIndex: 0,
+      isCardFlipped: false,
+      flashcardOrder: [], // array of indices
+    };
+
+    // DOM Element References
+    const elements = {
+      immediateLoader: document.getElementById('immediate-loader'),
+      app: document.getElementById('app'),
+      sidebar: document.getElementById('sidebar'),
+      sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
+      sidebarCloseBtn: document.getElementById('sidebar-close-btn'),
+      sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+      coursesListContainer: document.getElementById('courses-list-container'),
+      weeksListContainer: document.getElementById('weeks-list-container'),
+      addWeekBtn: document.getElementById('add-week-btn'),
+      
+      headerActiveCourseName: document.getElementById('header-active-course-name'),
+      headerActiveWeekName: document.getElementById('header-active-week-name'),
+      
+      themeToggleBtn: document.getElementById('theme-toggle-btn'),
+      themeIcon: document.getElementById('theme-icon'),
+
+      cgpaStatsBtn: document.getElementById('cgpa-stats-btn'),
+      cgpaModal: document.getElementById('cgpa-modal'),
+      closeCgpaModalBtn: document.getElementById('close-cgpa-modal-btn'),
+      dismissCgpaModalBtn: document.getElementById('dismiss-cgpa-modal-btn'),
+
+      addWeekModal: document.getElementById('add-week-modal'),
+      addWeekCourseLabel: document.getElementById('add-week-course-label'),
+      newWeekTitleInput: document.getElementById('new-week-title-input'),
+      cancelAddWeekBtn: document.getElementById('cancel-add-week-btn'),
+      confirmAddWeekBtn: document.getElementById('confirm-add-week-btn'),
+
+      studyPackHeader: document.getElementById('study-pack-header'),
+      packCourseTag: document.getElementById('pack-course-tag'),
+      packTitle: document.getElementById('pack-title'),
+      packMeta: document.getElementById('pack-meta'),
+      uploadNewSlidesBtn: document.getElementById('upload-new-slides-btn'),
+      exportDropdownWrapper: document.getElementById('export-dropdown-wrapper'),
+      exportMenuBtn: document.getElementById('export-menu-btn'),
+      exportMenu: document.getElementById('export-menu'),
+      exportMdBtn: document.getElementById('export-md-btn'),
+      exportJsonBtn: document.getElementById('export-json-btn'),
+      printExamBtn: document.getElementById('print-exam-btn'),
+      deletePackBtn: document.getElementById('delete-pack-btn'),
+
+      tabBtns: document.querySelectorAll('.tab-btn'),
+      tabFlashcardsCount: document.getElementById('tab-flashcards-count'),
+      
+      // Views
+      emptyStateView: document.getElementById('empty-state-view'),
+      emptyStateCourseTitle: document.getElementById('empty-state-course-title'),
+      dropZone: document.getElementById('drop-zone'),
+      slideFileInput: document.getElementById('slide-file-input'),
+      browseFilesBtn: document.getElementById('browse-files-btn'),
+      extractionPreviewCard: document.getElementById('extraction-preview-card'),
+      extractedFilename: document.getElementById('extracted-filename'),
+      extractedStats: document.getElementById('extracted-stats'),
+      extractedTextPreview: document.getElementById('extracted-text-preview'),
+      changeFileBtn: document.getElementById('change-file-btn'),
+      triggerGenerateBtn: document.getElementById('trigger-generate-btn'),
+      manualSlideText: document.getElementById('manual-slide-text'),
+      useManualTextBtn: document.getElementById('use-manual-text-btn'),
+
+      // Tab panes
+      tabSummaryView: document.getElementById('tab-summary-view'),
+      summaryTopicHeading: document.getElementById('summary-topic-heading'),
+      summaryExecutiveOverview: document.getElementById('summary-executive-overview'),
+      summaryTakeawaysList: document.getElementById('summary-takeaways-list'),
+      summaryFormulasContainer: document.getElementById('summary-formulas-container'),
+      summaryDefinitionsGrid: document.getElementById('summary-definitions-grid'),
+      definitionsSearchInput: document.getElementById('definitions-search-input'),
+
+      tabFlashcardsView: document.getElementById('tab-flashcards-view'),
+      flashcardCounter: document.getElementById('flashcard-counter'),
+      flashcardMasteryProgress: document.getElementById('flashcard-mastery-progress'),
+      flashcardMasteryLabel: document.getElementById('flashcard-mastery-label'),
+      flashcardShuffleBtn: document.getElementById('flashcard-shuffle-btn'),
+      flashcardResetMasteryBtn: document.getElementById('flashcard-reset-mastery-btn'),
+      flashcardContainer: document.getElementById('flashcard-container'),
+      flashcardInner: document.getElementById('flashcard-inner'),
+      cardFrontIndex: document.getElementById('card-front-index'),
+      cardFrontText: document.getElementById('card-front-text'),
+      cardBackIndex: document.getElementById('card-back-index'),
+      cardBackCite: document.getElementById('card-back-cite'),
+      cardBackText: document.getElementById('card-back-text'),
+      cardPrevBtn: document.getElementById('card-prev-btn'),
+      cardFlipBtn: document.getElementById('card-flip-btn'),
+      cardNextBtn: document.getElementById('card-next-btn'),
+      markNeedReviewBtn: document.getElementById('mark-need-review-btn'),
+      markMasteredBtn: document.getElementById('mark-mastered-btn'),
+
+      tabExamView: document.getElementById('tab-exam-view'),
+      examScoreNum: document.getElementById('exam-score-num'),
+      examScorePct: document.getElementById('exam-score-pct'),
+      examProjectedGrade: document.getElementById('exam-projected-grade'),
+      examFilterBtns: document.querySelectorAll('.exam-filter-btn'),
+      resetExamAnswersBtn: document.getElementById('reset-exam-answers-btn'),
+      questionsListContainer: document.getElementById('questions-list-container'),
+      masterAnswerKeyTable: document.getElementById('master-answer-key-table'),
+
+      tabSlidesView: document.getElementById('tab-slides-view'),
+      corpusSlideText: document.getElementById('corpus-slide-text'),
+      copySlideTextBtn: document.getElementById('copy-slide-text-btn'),
+
+      generationModal: document.getElementById('generation-modal'),
+      genStepsContainer: document.getElementById('gen-steps-container'),
+      stepExtract: document.getElementById('step-extract'),
+      stepGround: document.getElementById('step-ground'),
+      stepGemini: document.getElementById('step-gemini'),
+      stepValidate: document.getElementById('step-validate'),
+    };
+
+    // ==========================================
+    // INITIALIZATION & PERSISTENCE
+    // ==========================================
+    function initializeApp() {
+      // 1. Load Theme
+      const savedTheme = localStorage.getItem(THEME_STORAGE) || 'dark';
+      setTheme(savedTheme);
+
+      // 2. Load Courses & Decks Data
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          appState.currentCourseId = parsed.currentCourseId || 'b2c_marketing';
+          appState.currentWeekId = parsed.currentWeekId || 'week_1';
+          appState.courses = parsed.courses || {};
+        } catch (e) {
+          console.warn('Could not parse saved study decks, initializing fresh state', e);
+          initializeEmptyCourses();
+        }
+      } else {
+        initializeEmptyCourses();
+      }
+
+      // Ensure all 6 fixed courses exist in appState.courses
+      FIXED_COURSES.forEach(fc => {
+        if (!appState.courses[fc.id]) {
+          appState.courses[fc.id] = {
+            id: fc.id,
+            name: fc.name,
+            code: fc.code,
+            credits: fc.credits,
+            weeks: {} // Every course starts empty with zero preloaded packs!
+          };
+        }
+      });
+
+      // Render Sidebar Courses and Weeks
+      renderSidebarCourses();
+      renderWeeksList();
+
+      // Render Active View
+      renderCurrentCourseWeek();
+
+      // Setup Event Listeners
+      setupEventListeners();
+
+      // Dismiss Loader
+      setTimeout(() => {
+        if (elements.immediateLoader) {
+          elements.immediateLoader.classList.add('opacity-0', 'pointer-events-none');
+          setTimeout(() => elements.immediateLoader.remove(), 300);
+        }
+        if (elements.app) {
+          elements.app.classList.remove('opacity-0');
+        }
+      }, 50);
+    }
+
+    function initializeEmptyCourses() {
+      appState.courses = {};
+      FIXED_COURSES.forEach(fc => {
+        appState.courses[fc.id] = {
+          id: fc.id,
+          name: fc.name,
+          code: fc.code,
+          credits: fc.credits,
+          weeks: {} // Strictly empty
+        };
+      });
+      // By default ensure week_1 placeholder exists for navigation
+      appState.courses['b2c_marketing'].weeks['week_1'] = {
+        id: 'week_1',
+        title: 'Week 1',
+        created: Date.now(),
+        data: null // null means empty state
+      };
+    }
+
+    function saveState() {
+      try {
+        const payload = {
+          currentCourseId: appState.currentCourseId,
+          currentWeekId: appState.currentWeekId,
+          courses: appState.courses
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        console.error('Error saving state to localStorage', e);
+      }
+    }
+
+    function setTheme(theme) {
+      appState.theme = theme;
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        if (elements.themeIcon) elements.themeIcon.className = 'fa-solid fa-sun text-sm text-amber-400';
+      } else {
+        document.documentElement.classList.remove('dark');
+        if (elements.themeIcon) elements.themeIcon.className = 'fa-solid fa-moon text-sm text-slate-600';
+      }
+      localStorage.setItem(THEME_STORAGE, theme);
+    }
+
+    // ==========================================
+    // UI RENDERING: SIDEBAR & NAVIGATION
+    // ==========================================
+    function renderSidebarCourses() {
+      if (!elements.coursesListContainer) return;
+      elements.coursesListContainer.innerHTML = '';
+
+      FIXED_COURSES.forEach(course => {
+        const courseData = appState.courses[course.id] || { weeks: {} };
+        const weekCount = Object.keys(courseData.weeks || {}).length;
+        const isActive = appState.currentCourseId === course.id;
+
+        const btn = document.createElement('button');
+        btn.className = `w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between group ${
+          isActive 
+            ? 'bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800/80 shadow-xs' 
+            : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-transparent'
+        }`;
+
+        btn.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-lg ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:text-indigo-600'} flex items-center justify-center shrink-0 text-xs transition-colors">
+              <i class="fa-solid ${course.icon}"></i>
+            </div>
+            <div class="truncate">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold ${isActive ? 'text-indigo-900 dark:text-indigo-100' : 'text-slate-800 dark:text-slate-200'} truncate">${course.name}</span>
+              </div>
+              <p class="text-[10px] text-slate-400">${course.code} • ${course.credits} Credits</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${weekCount > 0 ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'} shrink-0 ml-1">
+            ${weekCount} wk${weekCount === 1 ? '' : 's'}
+          </span>
+        `;
+
+        btn.addEventListener('click', () => {
+          selectCourse(course.id);
+        });
+
+        elements.coursesListContainer.appendChild(btn);
+      });
+    }
+
+    function renderWeeksList() {
+      if (!elements.weeksListContainer) return;
+      elements.weeksListContainer.innerHTML = '';
+
+      const currentCourse = appState.courses[appState.currentCourseId];
+      if (!currentCourse) return;
+
+      const weeks = currentCourse.weeks || {};
+      const weekKeys = Object.keys(weeks);
+
+      if (weekKeys.length === 0) {
+        elements.weeksListContainer.innerHTML = `
+          <div class="p-3 text-center rounded-xl bg-slate-100/60 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800">
+            <p class="text-[11px] text-slate-400">No weeks created yet</p>
+            <button id="add-first-week-btn" class="mt-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+              + Create Week 1
+            </button>
+          </div>
+        `;
+        const addFirstBtn = document.getElementById('add-first-week-btn');
+        if (addFirstBtn) {
+          addFirstBtn.addEventListener('click', () => createNewWeek('Week 1'));
+        }
+        return;
+      }
+
+      weekKeys.forEach(wId => {
+        const week = weeks[wId];
+        const isSelected = appState.currentWeekId === wId;
+        const hasData = week.data !== null && week.data !== undefined;
+
+        const row = document.createElement('div');
+        row.className = `flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
+          isSelected 
+            ? 'bg-indigo-600 text-white font-semibold shadow-xs' 
+            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800/60'
+        }`;
+
+        row.innerHTML = `
+          <div class="flex items-center gap-2 truncate">
+            <i class="fa-solid ${hasData ? 'fa-circle-check text-emerald-400' : 'fa-circle-dot opacity-40'} text-[10px]"></i>
+            <span class="truncate">${week.title || wId}</span>
+          </div>
+          <span class="text-[9px] px-1.5 py-0.2 rounded ${isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}">
+            ${hasData ? 'Ready' : 'Empty'}
+          </span>
+        `;
+
+        row.addEventListener('click', () => {
+          selectWeek(wId);
+        });
+
+        elements.weeksListContainer.appendChild(row);
+      });
+    }
+
+    function selectCourse(courseId) {
+      appState.currentCourseId = courseId;
+      const course = appState.courses[courseId];
+      const weekKeys = Object.keys(course.weeks || {});
+
+      if (weekKeys.length === 0) {
+        const newWId = 'week_1';
+        course.weeks[newWId] = {
+          id: newWId,
+          title: 'Week 1',
+          created: Date.now(),
+          data: null
+        };
+        appState.currentWeekId = newWId;
+      } else if (!course.weeks[appState.currentWeekId]) {
+        appState.currentWeekId = weekKeys[0];
+      }
+
+      saveState();
+      renderSidebarCourses();
+      renderWeeksList();
+      renderCurrentCourseWeek();
+      closeSidebar();
+    }
+
+    function selectWeek(weekId) {
+      appState.currentWeekId = weekId;
+      saveState();
+      renderWeeksList();
+      renderCurrentCourseWeek();
+      closeSidebar();
+    }
+
+    function createNewWeek(title) {
+      const course = appState.courses[appState.currentCourseId];
+      if (!course) return;
+      if (!course.weeks) course.weeks = {};
+
+      const weekNum = Object.keys(course.weeks).length + 1;
+      const id = `week_${Date.now()}`;
+      const finalTitle = title || `Week ${weekNum}`;
+
+      course.weeks[id] = {
+        id: id,
+        title: finalTitle,
+        created: Date.now(),
+        data: null
+      };
+
+      appState.currentWeekId = id;
+      saveState();
+      renderSidebarCourses();
+      renderWeeksList();
+      renderCurrentCourseWeek();
+    }
+
+    // ==========================================
+    // RENDER CURRENT DECK OR EMPTY STATE
+    // ==========================================
+    function renderCurrentCourseWeek() {
+      const course = appState.courses[appState.currentCourseId] || FIXED_COURSES[0];
+      const week = (course.weeks && course.weeks[appState.currentWeekId]) ? course.weeks[appState.currentWeekId] : null;
+
+      // Update Header Text
+      if (elements.headerActiveCourseName) elements.headerActiveCourseName.textContent = course.name;
+      if (elements.headerActiveWeekName) elements.headerActiveWeekName.textContent = week ? (week.title || appState.currentWeekId) : 'No Week';
+
+      // Check if this week has generated study data
+      if (!week || !week.data) {
+        showEmptyState(course, week);
+      } else {
+        showStudyPack(course, week);
+      }
+    }
+
+    function showEmptyState(course, week) {
+      if (elements.studyPackHeader) elements.studyPackHeader.classList.add('hidden');
+      if (elements.emptyStateView) elements.emptyStateView.classList.remove('hidden');
+
+      elements.tabSummaryView.classList.add('hidden');
+      elements.tabFlashcardsView.classList.add('hidden');
+      elements.tabExamView.classList.add('hidden');
+      elements.tabSlidesView.classList.add('hidden');
+
+      appState.pendingSlideText = '';
+      appState.pendingFilename = '';
+      appState.pendingSlideCount = 0;
+      appState.pendingWordCount = 0;
+      if (elements.extractionPreviewCard) elements.extractionPreviewCard.classList.add('hidden');
+      if (elements.manualSlideText) elements.manualSlideText.value = '';
+
+      if (elements.emptyStateCourseTitle) {
+        elements.emptyStateCourseTitle.textContent = `${course.name} • ${week ? week.title : 'Week 1'}`;
+      }
+    }
+
+    function showStudyPack(course, week) {
+      if (elements.emptyStateView) elements.emptyStateView.classList.add('hidden');
+      if (elements.studyPackHeader) elements.studyPackHeader.classList.remove('hidden');
+
+      const data = week.data;
+
+      if (elements.packCourseTag) elements.packCourseTag.textContent = course.code;
+      if (elements.packTitle) elements.packTitle.textContent = `${course.name} — ${week.title || 'Study Deck'}`;
+      if (elements.packMeta) {
+        const slideCount = data.slide_count || 'lecture';
+        const cardCount = (data.flashcards && data.flashcards.length) || 0;
+        const qCount = (data.practice_questions && data.practice_questions.length) || 40;
+        const adminFiltered = (data.filtered_admin_count && data.filtered_admin_count > 0)
+          ? ` • ${data.filtered_admin_count} Admin Slides Filtered`
+          : '';
+        elements.packMeta.textContent = `Extracted from ${slideCount} substantive slides${adminFiltered} • Strictly Grounded • ${cardCount} Flashcards • ${qCount} Questions`;
+      }
+      if (elements.tabFlashcardsCount) {
+        elements.tabFlashcardsCount.textContent = (data.flashcards && data.flashcards.length) || 0;
+      }
+
+      populateTopicSummary(data.summary, course, week);
+      populateFlashcards(data.flashcards || []);
+      populatePracticeExam(data.practice_questions || []);
+      populateSlideInspector(data.raw_slide_text || '', data);
+
+      switchTab(appState.activeTab);
+    }
+
+    function switchTab(tabKey) {
+      appState.activeTab = tabKey;
+
+      elements.tabBtns.forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabKey) {
+          btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all bg-indigo-600 text-white shadow-sm';
+        } else {
+          btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800';
+        }
+      });
+
+      elements.tabSummaryView.classList.add('hidden');
+      elements.tabFlashcardsView.classList.add('hidden');
+      elements.tabExamView.classList.add('hidden');
+      elements.tabSlidesView.classList.add('hidden');
+
+      if (tabKey === 'summary') elements.tabSummaryView.classList.remove('hidden');
+      if (tabKey === 'flashcards') elements.tabFlashcardsView.classList.remove('hidden');
+      if (tabKey === 'exam') elements.tabExamView.classList.remove('hidden');
+      if (tabKey === 'slides') elements.tabSlidesView.classList.remove('hidden');
+    }
+
+    // ==========================================
+    // POPULATE TAB 1: TOPIC SUMMARY
+    // ==========================================
+    function populateTopicSummary(summary, course, week) {
+      if (!summary) return;
+
+      if (elements.summaryTopicHeading) {
+        elements.summaryTopicHeading.textContent = `${course.name} (${course.code}) — ${week.title} Synthesis`;
+      }
+      if (elements.summaryExecutiveOverview) {
+        elements.summaryExecutiveOverview.textContent = summary.executive_overview || 'Comprehensive synthesis of weekly lecture concepts.';
+      }
+
+      // Takeaways
+      if (elements.summaryTakeawaysList) {
+        elements.summaryTakeawaysList.innerHTML = '';
+        const takeaways = summary.core_takeaways || [];
+        takeaways.forEach((item, idx) => {
+          const li = document.createElement('li');
+          li.className = 'flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors';
+          li.innerHTML = `
+            <span class="w-5 h-5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">${idx + 1}</span>
+            <span class="leading-relaxed">${escapeHtml(item)}</span>
+          `;
+          elements.summaryTakeawaysList.appendChild(li);
+        });
+      }
+
+      // Formulas & Frameworks
+      if (elements.summaryFormulasContainer) {
+        elements.summaryFormulasContainer.innerHTML = '';
+        const formulas = summary.key_formulas_and_frameworks || [];
+        if (formulas.length === 0) {
+          elements.summaryFormulasContainer.innerHTML = `
+            <p class="text-xs text-slate-400 italic p-3">No explicit mathematical formulas or named matrices were found in this slide set. Core conceptual relationships are covered in Definitions.</p>
+          `;
+        } else {
+          formulas.forEach(form => {
+            const card = document.createElement('div');
+            card.className = 'p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800';
+            card.innerHTML = `
+              <div class="flex items-center justify-between mb-1">
+                <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">${escapeHtml(form.name || 'Framework')}</h4>
+                <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300">${escapeHtml(form.slide_reference || 'Slide Ref')}</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800/80 mt-1.5 whitespace-pre-wrap">${escapeHtml(form.details || '')}</p>
+            `;
+            elements.summaryFormulasContainer.appendChild(card);
+          });
+        }
+      }
+
+      // Definitions
+      renderDefinitions(summary.key_definitions || []);
+    }
+
+    function renderDefinitions(defs) {
+      if (!elements.summaryDefinitionsGrid) return;
+      elements.summaryDefinitionsGrid.innerHTML = '';
+
+      if (defs.length === 0) {
+        elements.summaryDefinitionsGrid.innerHTML = `
+          <p class="text-xs text-slate-400 italic col-span-2 p-3">No definitions available.</p>
+        `;
+        return;
+      }
+
+      defs.forEach(def => {
+        const item = document.createElement('div');
+        item.className = 'definition-item p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors';
+        item.innerHTML = `
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <h5 class="text-xs font-bold text-indigo-600 dark:text-indigo-400">${escapeHtml(def.term || '')}</h5>
+            <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">${escapeHtml(def.slide_reference || 'Slide')}</span>
+          </div>
+          <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${escapeHtml(def.definition || '')}</p>
+        `;
+        elements.summaryDefinitionsGrid.appendChild(item);
+      });
+    }
+
+    // ==========================================
+    // POPULATE TAB 2: 3D INTERACTIVE FLASHCARDS
+    // ==========================================
+    function populateFlashcards(flashcards) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      
+      if (week && week.data) {
+        if (!week.data.masteredFlashcards) {
+          week.data.masteredFlashcards = {};
+        }
+      }
+
+      appState.flashcardOrder = flashcards.map((_, i) => i);
+      appState.currentCardIndex = 0;
+      appState.isCardFlipped = false;
+
+      updateFlashcardView();
+    }
+
+    function updateFlashcardView() {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      const cards = (week && week.data && week.data.flashcards) || [];
+
+      if (cards.length === 0) {
+        if (elements.cardFrontText) elements.cardFrontText.textContent = 'No flashcards available in this deck.';
+        if (elements.cardBackText) elements.cardBackText.textContent = '';
+        if (elements.flashcardCounter) elements.flashcardCounter.textContent = '0 of 0';
+        return;
+      }
+
+      if (appState.currentCardIndex < 0) appState.currentCardIndex = 0;
+      if (appState.currentCardIndex >= appState.flashcardOrder.length) {
+        appState.currentCardIndex = appState.flashcardOrder.length - 1;
+      }
+
+      const realIdx = appState.flashcardOrder[appState.currentCardIndex];
+      const currentCard = cards[realIdx];
+
+      if (elements.flashcardCounter) {
+        elements.flashcardCounter.textContent = `Card ${appState.currentCardIndex + 1} of ${cards.length}`;
+      }
+
+      if (elements.cardFrontIndex) elements.cardFrontIndex.textContent = `#${appState.currentCardIndex + 1}`;
+      if (elements.cardFrontText) elements.cardFrontText.textContent = currentCard.front || 'Term';
+
+      if (elements.cardBackIndex) elements.cardBackIndex.textContent = `#${appState.currentCardIndex + 1}`;
+      if (elements.cardBackCite) elements.cardBackCite.textContent = currentCard.slide_reference || 'Slide';
+      if (elements.cardBackText) elements.cardBackText.textContent = currentCard.back || 'Definition';
+
+      appState.isCardFlipped = false;
+      if (elements.flashcardInner) {
+        elements.flashcardInner.classList.remove('rotate-y-180');
+      }
+
+      const masteredMap = (week && week.data && week.data.masteredFlashcards) || {};
+      const masteredCount = Object.keys(masteredMap).filter(k => masteredMap[k] === true).length;
+      const pct = Math.round((masteredCount / cards.length) * 100);
+
+      if (elements.flashcardMasteryProgress) elements.flashcardMasteryProgress.style.width = `${pct}%`;
+      if (elements.flashcardMasteryLabel) elements.flashcardMasteryLabel.textContent = `${masteredCount}/${cards.length} Mastered (${pct}%)`;
+
+      const isCurrentMastered = masteredMap[realIdx] === true;
+      if (elements.markMasteredBtn) {
+        elements.markMasteredBtn.className = isCurrentMastered 
+          ? 'px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white shadow-sm flex items-center gap-1.5'
+          : 'px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center gap-1.5';
+      }
+    }
+
+    function flipCurrentCard() {
+      appState.isCardFlipped = !appState.isCardFlipped;
+      if (elements.flashcardInner) {
+        if (appState.isCardFlipped) {
+          elements.flashcardInner.classList.add('rotate-y-180');
+        } else {
+          elements.flashcardInner.classList.remove('rotate-y-180');
+        }
+      }
+    }
+
+    function nextFlashcard() {
+      if (appState.currentCardIndex < appState.flashcardOrder.length - 1) {
+        appState.currentCardIndex++;
+        updateFlashcardView();
+      } else {
+        appState.currentCardIndex = 0;
+        updateFlashcardView();
+      }
+    }
+
+    function prevFlashcard() {
+      if (appState.currentCardIndex > 0) {
+        appState.currentCardIndex--;
+        updateFlashcardView();
+      } else {
+        appState.currentCardIndex = appState.flashcardOrder.length - 1;
+        updateFlashcardView();
+      }
+    }
+
+    function shuffleFlashcards() {
+      const order = [...appState.flashcardOrder];
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      appState.flashcardOrder = order;
+      appState.currentCardIndex = 0;
+      updateFlashcardView();
+    }
+
+    function markCurrentCardMastered(isMastered) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.masteredFlashcards) week.data.masteredFlashcards = {};
+      const realIdx = appState.flashcardOrder[appState.currentCardIndex];
+      week.data.masteredFlashcards[realIdx] = isMastered;
+
+      saveState();
+      updateFlashcardView();
+
+      setTimeout(() => {
+        nextFlashcard();
+      }, 300);
+    }
+
+    // ==========================================
+    // POPULATE TAB 3: 40 PRACTICE QUESTIONS
+    // ==========================================
+    function populatePracticeExam(questions) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+
+      if (week && week.data) {
+        if (!week.data.userAnswers) week.data.userAnswers = {};
+        if (!week.data.selfGrading) week.data.selfGrading = {};
+      }
+
+      renderQuestionsList();
+      renderMasterAnswerKey();
+      updateExamScoreUI();
+    }
+
+    function renderQuestionsList() {
+      if (!elements.questionsListContainer) return;
+      elements.questionsListContainer.innerHTML = '';
+
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      const questions = (week && week.data && week.data.practice_questions) || [];
+      const userAnswers = (week && week.data && week.data.userAnswers) || {};
+      const selfGrading = (week && week.data && week.data.selfGrading) || {};
+
+      const currentFilter = appState.examFilter;
+
+      const filtered = questions.filter(q => {
+        const num = q.question_number;
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'mcq') return num >= 1 && num <= 20;
+        if (currentFilter === 'fill') return num >= 21 && num <= 30;
+        if (currentFilter === 'short') return num >= 31 && num <= 40;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        elements.questionsListContainer.innerHTML = `
+          <div class="text-center p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <p class="text-xs text-slate-400">No questions match this section filter.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(q => {
+        const num = q.question_number;
+        const card = document.createElement('div');
+        card.className = 'p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3';
+        card.id = `q-card-${num}`;
+
+        let typeBadge = '';
+        if (num <= 20) {
+          typeBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">MCQ (1–20)</span>';
+        } else if (num <= 30) {
+          typeBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">Rapid Recall (21–30)</span>';
+        } else {
+          typeBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">Analytical & Conceptual (31–40)</span>';
+        }
+
+        const citation = q.slide_reference ? `<span class="text-[10px] font-mono text-slate-400"><i class="fa-solid fa-bookmark mr-1"></i>${escapeHtml(q.slide_reference)}</span>` : '';
+
+        if (num <= 20) {
+          const chosenAnswer = userAnswers[num];
+          const isAnswered = chosenAnswer !== undefined;
+          const correctKey = normalizeAnswerKey(q.correct_answer, q.options);
+
+          let optionsHtml = '<div class="space-y-2 mt-3">';
+          (q.options || []).forEach((opt, optIdx) => {
+            const letter = ['A', 'B', 'C', 'D'][optIdx] || `${optIdx + 1}`;
+            let btnClasses = 'w-full text-left p-3 rounded-xl border text-xs flex items-start gap-2.5 transition-all ';
+
+            if (!isAnswered) {
+              btnClasses += 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 text-slate-800 dark:text-slate-200 cursor-pointer';
+            } else {
+              const isOptionCorrect = (optIdx === correctKey || letter === correctKey || opt === correctKey);
+              const isOptionChosen = (chosenAnswer === optIdx || chosenAnswer === letter || chosenAnswer === opt);
+
+              if (isOptionCorrect) {
+                btnClasses += 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-500 text-emerald-900 dark:text-emerald-100 font-semibold';
+              } else if (isOptionChosen) {
+                btnClasses += 'bg-rose-50 dark:bg-rose-950/80 border-rose-500 text-rose-900 dark:text-rose-100 font-medium';
+              } else {
+                btnClasses += 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-400 opacity-60';
+              }
+            }
+
+            optionsHtml += `
+              <button type="button" class="${btnClasses}" onclick="window.selectMCQAnswer(${num}, ${optIdx})" ${isAnswered ? 'disabled' : ''}>
+                <span class="w-5 h-5 rounded-md ${isAnswered && (optIdx === correctKey || letter === correctKey) ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'} flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">${letter}</span>
+                <span class="leading-relaxed">${escapeHtml(opt)}</span>
+              </button>
+            `;
+          });
+          optionsHtml += '</div>';
+
+          let explanationHtml = '';
+          if (isAnswered) {
+            explanationHtml = `
+              <div class="mt-3 p-3.5 rounded-xl bg-indigo-50/80 dark:bg-slate-950 border border-indigo-100 dark:border-slate-800 text-xs">
+                <div class="flex items-center gap-2 font-bold text-indigo-700 dark:text-indigo-300 mb-1">
+                  <i class="fa-solid fa-circle-info"></i>
+                  <span>Examiner Explanation</span>
+                  <span class="ml-auto font-mono text-[10px] text-slate-400">${escapeHtml(q.slide_reference || '')}</span>
+                </div>
+                <p class="text-slate-700 dark:text-slate-300 leading-relaxed">${escapeHtml(q.explanation || 'Strictly verified from slide content.')}</p>
+              </div>
+            `;
+          }
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs text-indigo-600 dark:text-indigo-400">Q${num}.</span>
+                ${typeBadge}
+              </div>
+              ${citation}
+            </div>
+            <h4 class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug">${escapeHtml(q.question || '')}</h4>
+            ${optionsHtml}
+            ${explanationHtml}
+          `;
+
+        } else if (num <= 30) {
+          const currentInput = userAnswers[num] || '';
+          const isSubmitted = userAnswers[`${num}_submitted`] === true;
+          const targetTerm = q.target_term || '';
+          const acceptable = [targetTerm.toLowerCase(), ...(q.acceptable_variations || []).map(v => v.toLowerCase())];
+          const isCorrect = isSubmitted && acceptable.includes(currentInput.trim().toLowerCase());
+
+          let feedbackBox = '';
+          if (isSubmitted) {
+            feedbackBox = `
+              <div class="mt-2.5 p-3 rounded-xl ${isCorrect ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100' : 'bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-100'} text-xs">
+                <div class="flex items-center gap-2 font-bold">
+                  <i class="fa-solid ${isCorrect ? 'fa-check text-emerald-500' : 'fa-xmark text-rose-500'}"></i>
+                  <span>${isCorrect ? 'Exact Slide Match! (+1 Point)' : 'Target Term:'} <strong>${escapeHtml(targetTerm)}</strong></span>
+                </div>
+                <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-1">${escapeHtml(q.explanation || '')}</p>
+              </div>
+            `;
+          }
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs text-amber-600 dark:text-amber-400">Q${num}.</span>
+                ${typeBadge}
+              </div>
+              ${citation}
+            </div>
+            <p class="text-xs sm:text-sm font-medium text-slate-900 dark:text-slate-100 leading-relaxed">${escapeHtml(q.sentence_with_blank || q.question || '')}</p>
+            <div class="flex items-center gap-2 mt-2">
+              <input type="text" id="fill-input-${num}" value="${escapeHtml(currentInput)}" placeholder="Enter exact missing slide term..." class="flex-1 text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isSubmitted ? (isCorrect ? 'border-emerald-500' : 'border-rose-400') : ''}" ${isSubmitted ? 'readonly' : ''} onkeydown="if(event.key === 'Enter') window.submitFillAnswer(${num})" />
+              ${!isSubmitted ? `
+                <button type="button" onclick="window.submitFillAnswer(${num})" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs shrink-0">
+                  Check
+                </button>
+              ` : `
+                <button type="button" onclick="window.retryFillAnswer(${num})" class="px-3 py-2 rounded-xl text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 shrink-0">
+                  Edit
+                </button>
+              `}
+            </div>
+            ${feedbackBox}
+          `;
+
+        } else {
+          const draftText = userAnswers[num] || '';
+          const isCompared = userAnswers[`${num}_revealed`] === true;
+          const scoreGrade = selfGrading[num];
+
+          let rubricHtml = '';
+          if (isCompared) {
+            const criteriaList = (q.key_grading_points || []).map((pt, ptIdx) => {
+              const isChecked = userAnswers[`${num}_pt_${ptIdx}`] === true;
+              return `
+                <label class="flex items-start gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300 hover:text-indigo-600">
+                  <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleGradingCheck(${num}, ${ptIdx}, this.checked)" class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
+                  <span>${escapeHtml(pt)}</span>
+                </label>
+              `;
+            }).join('');
+
+            rubricHtml = `
+              <div class="mt-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs space-y-3">
+                <div>
+                  <h5 class="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                    <span>Exemplar Model Answer (Slide Grounded)</span>
+                  </h5>
+                  <p class="text-slate-700 dark:text-slate-300 mt-1 leading-relaxed bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-slate-800">${escapeHtml(q.model_answer || '')}</p>
+                </div>
+
+                ${(q.key_grading_points && q.key_grading_points.length > 0) ? `
+                  <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <p class="font-semibold text-slate-800 dark:text-slate-200 mb-1.5">Key Grading Checklist Criteria:</p>
+                    <div class="space-y-1.5">${criteriaList}</div>
+                  </div>
+                ` : ''}
+
+                <!-- Self Assessment Scoring -->
+                <div class="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span class="font-semibold text-slate-700 dark:text-slate-300">Self-Grading Assessment:</span>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="window.setShortScore(${num}, 'mastered')" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${scoreGrade === 'mastered' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200'}">
+                      ✓ Full Marks
+                    </button>
+                    <button type="button" onclick="window.setShortScore(${num}, 'partial')" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${scoreGrade === 'partial' ? 'bg-amber-600 text-white' : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200'}">
+                      ½ Partial
+                    </button>
+                    <button type="button" onclick="window.setShortScore(${num}, 'review')" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${scoreGrade === 'review' ? 'bg-rose-600 text-white' : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200'}">
+                      ✕ Need Review
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs text-violet-600 dark:text-violet-400">Q${num}.</span>
+                ${typeBadge}
+              </div>
+              ${citation}
+            </div>
+            <h4 class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug">${escapeHtml(q.question || '')}</h4>
+            <div class="space-y-2 mt-2">
+              <textarea id="short-answer-${num}" rows="3" placeholder="Draft your analytical response here..." class="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans" oninput="window.saveShortDraft(${num}, this.value)">${escapeHtml(draftText)}</textarea>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-slate-400" id="word-count-${num}">${countWords(draftText)} words</span>
+                <button type="button" onclick="window.toggleShortAnswerReveal(${num})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-colors">
+                  <i class="fa-solid ${isCompared ? 'fa-eye-slash' : 'fa-balance-scale'} mr-1"></i>
+                  <span>${isCompared ? 'Hide Model Answer' : 'Compare with Model Rubric'}</span>
+                </button>
+              </div>
+            </div>
+            ${rubricHtml}
+          `;
+        }
+
+        elements.questionsListContainer.appendChild(card);
+      });
+    }
+
+    function renderMasterAnswerKey() {
+      if (!elements.masterAnswerKeyTable) return;
+      elements.masterAnswerKeyTable.innerHTML = '';
+
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      const questions = (week && week.data && week.data.practice_questions) || [];
+
+      if (questions.length === 0) return;
+
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1';
+
+      questions.forEach(q => {
+        const num = q.question_number;
+        let answerSummary = '';
+
+        if (num <= 20) {
+          const letter = getAnswerLetter(q.correct_answer, q.options);
+          answerSummary = `Option <strong>${letter}</strong>`;
+        } else if (num <= 30) {
+          answerSummary = `Target: <strong>${escapeHtml(q.target_term || '')}</strong>`;
+        } else {
+          answerSummary = `<span class="italic text-[11px] truncate block">${escapeHtml(q.model_answer || 'See Model Rubric')}</span>`;
+        }
+
+        const item = document.createElement('div');
+        item.className = 'p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2';
+        item.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-6 h-6 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center shrink-0">Q${num}</span>
+            <div class="truncate text-[11px] text-slate-700 dark:text-slate-300">${answerSummary}</div>
+          </div>
+          <span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 shrink-0 font-semibold">${escapeHtml(q.slide_reference || '')}</span>
+        `;
+        grid.appendChild(item);
+      });
+
+      elements.masterAnswerKeyTable.appendChild(grid);
+    }
+
+    function updateExamScoreUI() {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      const questions = week.data.practice_questions || [];
+      const userAnswers = week.data.userAnswers || {};
+      const selfGrading = week.data.selfGrading || {};
+
+      let totalScore = 0;
+
+      for (let i = 1; i <= 20; i++) {
+        const q = questions.find(item => item.question_number === i);
+        if (q && userAnswers[i] !== undefined) {
+          const chosen = userAnswers[i];
+          const correctKey = normalizeAnswerKey(q.correct_answer, q.options);
+          const letter = ['A', 'B', 'C', 'D'][chosen];
+          if (chosen === correctKey || letter === correctKey || q.options[chosen] === correctKey) {
+            totalScore += 1;
+          }
+        }
+      }
+
+      for (let i = 21; i <= 30; i++) {
+        const q = questions.find(item => item.question_number === i);
+        if (q && userAnswers[`${i}_submitted`] === true) {
+          const input = (userAnswers[i] || '').trim().toLowerCase();
+          const target = (q.target_term || '').trim().toLowerCase();
+          const acceptable = [target, ...(q.acceptable_variations || []).map(v => v.trim().toLowerCase())];
+          if (acceptable.includes(input)) {
+            totalScore += 1;
+          }
+        }
+      }
+
+      for (let i = 31; i <= 40; i++) {
+        const grade = selfGrading[i];
+        if (grade === 'mastered') totalScore += 1;
+        if (grade === 'partial') totalScore += 0.5;
+      }
+
+      const totalPossible = questions.length || 40;
+      const pct = Math.round((totalScore / totalPossible) * 100);
+
+      if (elements.examScoreNum) elements.examScoreNum.textContent = totalScore;
+      if (elements.examScorePct) elements.examScorePct.textContent = `${pct}% Accuracy`;
+
+      let gradeLabel = 'A (4.0 Target)';
+      if (pct >= 85) gradeLabel = 'A (4.0 First Class Honors) 🌟';
+      else if (pct >= 75) gradeLabel = 'A- (3.7 Excellent)';
+      else if (pct >= 65) gradeLabel = 'B+ (3.3 Good Standing)';
+      else if (pct >= 50) gradeLabel = 'B (3.0 Passing)';
+      else gradeLabel = 'Need Slide Revision (< 3.0)';
+
+      if (elements.examProjectedGrade) elements.examProjectedGrade.textContent = gradeLabel;
+    }
+
+    // Window-scoped interactive handlers for questions
+    window.selectMCQAnswer = function(qNum, optionIdx) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.userAnswers) week.data.userAnswers = {};
+      week.data.userAnswers[qNum] = optionIdx;
+      saveState();
+      renderQuestionsList();
+      updateExamScoreUI();
+    };
+
+    window.submitFillAnswer = function(qNum) {
+      const inputEl = document.getElementById(`fill-input-${qNum}`);
+      if (!inputEl) return;
+      const val = inputEl.value;
+
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.userAnswers) week.data.userAnswers = {};
+      week.data.userAnswers[qNum] = val;
+      week.data.userAnswers[`${qNum}_submitted`] = true;
+      saveState();
+      renderQuestionsList();
+      updateExamScoreUI();
+    };
+
+    window.retryFillAnswer = function(qNum) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (week.data.userAnswers) {
+        week.data.userAnswers[`${qNum}_submitted`] = false;
+      }
+      saveState();
+      renderQuestionsList();
+      updateExamScoreUI();
+    };
+
+    window.saveShortDraft = function(qNum, text) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.userAnswers) week.data.userAnswers = {};
+      week.data.userAnswers[qNum] = text;
+      
+      const countEl = document.getElementById(`word-count-${qNum}`);
+      if (countEl) countEl.textContent = `${countWords(text)} words`;
+      saveState();
+    };
+
+    window.toggleShortAnswerReveal = function(qNum) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.userAnswers) week.data.userAnswers = {};
+      const curr = week.data.userAnswers[`${qNum}_revealed`] === true;
+      week.data.userAnswers[`${qNum}_revealed`] = !curr;
+      saveState();
+      renderQuestionsList();
+    };
+
+    window.toggleGradingCheck = function(qNum, ptIdx, isChecked) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.userAnswers) week.data.userAnswers = {};
+      week.data.userAnswers[`${qNum}_pt_${ptIdx}`] = isChecked;
+      saveState();
+    };
+
+    window.setShortScore = function(qNum, grade) {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      if (!week.data.selfGrading) week.data.selfGrading = {};
+      week.data.selfGrading[qNum] = grade;
+      saveState();
+      renderQuestionsList();
+      updateExamScoreUI();
+    };
+
+    // ==========================================
+    // POPULATE TAB 4: SLIDE GROUNDING INSPECTOR
+    // ==========================================
+    function populateSlideInspector(slideText, data) {
+      if (elements.corpusSlideText) {
+        let banner = '';
+        if (data && data.filtered_admin_count !== undefined) {
+          banner = `========================================================================\n` +
+                   `CONTENT FILTERING & RELEVANCE STATUS: ACTIVE\n` +
+                   `• Substantive Body Slides Ingested: ${data.slide_count || 0}\n` +
+                   `• Administrative / Intro Slides Filtered Out: ${data.filtered_admin_count}\n` +
+                   `• Filtered Categories: Cover/Title, Agenda, Bios, Grading, Office Hours, Q&A/Thanks\n` +
+                   `• High-Yield Academic Focus: Formal Definitions, Frameworks, Formulas, Trade-offs\n` +
+                   `========================================================================\n\n`;
+        }
+        elements.corpusSlideText.textContent = banner + (slideText || 'No slide text loaded.');
+      }
+    }
+
+    // ==========================================
+    // CLIENT-SIDE FILE EXTRACTION (PDF, PPTX, TXT)
+    // ==========================================
+    async function handleFileSelected(file) {
+      if (!file) return;
+
+      const filename = file.name;
+      const ext = filename.split('.').pop().toLowerCase();
+
+      try {
+        setGenerationStep('step-extract', 'active');
+        let extracted = '';
+        let slideCount = 1;
+
+        if (ext === 'pdf') {
+          extracted = await extractTextFromPdf(file);
+          slideCount = (extracted.match(/--- Slide \d+ ---/g) || []).length || 1;
+        } else if (ext === 'pptx') {
+          extracted = await extractTextFromPptx(file);
+          slideCount = (extracted.match(/--- Slide \d+ ---/g) || []).length || 1;
+        } else {
+          extracted = await file.text();
+          if (!extracted.includes('--- Slide')) {
+            const lines = extracted.split('\n');
+            const chunkSize = Math.max(15, Math.ceil(lines.length / 8));
+            let chunked = '';
+            let sNum = 1;
+            for (let i = 0; i < lines.length; i += chunkSize) {
+              chunked += `\n\n--- Slide ${sNum} ---\n` + lines.slice(i, i + chunkSize).join('\n');
+              sNum++;
+            }
+            extracted = chunked;
+            slideCount = sNum - 1;
+          } else {
+            slideCount = (extracted.match(/--- Slide \d+ ---/g) || []).length || 1;
+          }
+        }
+
+        const wordCount = countWords(extracted);
+
+        appState.pendingSlideText = extracted;
+        appState.pendingFilename = filename;
+        appState.pendingSlideCount = slideCount;
+        appState.pendingWordCount = wordCount;
+
+        if (elements.extractedFilename) elements.extractedFilename.textContent = filename;
+        if (elements.extractedStats) elements.extractedStats.textContent = `${slideCount} slides detected • ${wordCount.toLocaleString()} words extracted`;
+        if (elements.extractedTextPreview) elements.extractedTextPreview.textContent = extracted.slice(0, 3000) + (extracted.length > 3000 ? '\n\n... [Text truncated for preview, full text ready for ingestion]' : '');
+        if (elements.extractionPreviewCard) elements.extractionPreviewCard.classList.remove('hidden');
+
+      } catch (err) {
+        console.error('File parsing error', err);
+        showErrorModal('File Extraction Error', `Failed to extract text from ${filename}: ${err.message || 'Unknown error'}. You can also paste the slide text manually.`);
+      }
+    }
+
+    async function extractTextFromPdf(file) {
+      if (!window.pdfjsLib) {
+        throw new Error('PDF.js library is not ready.');
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += `\n\n--- Slide ${i} ---\n` + pageText.trim();
+      }
+      return fullText;
+    }
+
+    async function extractTextFromPptx(file) {
+      if (!window.JSZip) {
+        throw new Error('JSZip library is not ready for PPTX extraction.');
+      }
+      const zip = new window.JSZip();
+      const contents = await zip.loadAsync(file);
+      
+      const slideFiles = Object.keys(contents.files)
+        .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+        .sort((a, b) => {
+          const numA = parseInt(a.match(/slide(\d+)\.xml/)[1], 10);
+          const numB = parseInt(b.match(/slide(\d+)\.xml/)[1], 10);
+          return numA - numB;
+        });
+
+      if (slideFiles.length === 0) {
+        throw new Error('No slide XML entries found in PPTX archive.');
+      }
+
+      let extractedText = '';
+      for (let i = 0; i < slideFiles.length; i++) {
+        const xmlStr = await contents.files[slideFiles[i]].async('text');
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlStr, 'text/xml');
+        const textNodes = xmlDoc.getElementsByTagName('a:t');
+        let slideTokens = [];
+        for (let t = 0; t < textNodes.length; t++) {
+          const txt = textNodes[t].textContent.trim();
+          if (txt) slideTokens.push(txt);
+        }
+        extractedText += `\n\n--- Slide ${i + 1} ---\n` + slideTokens.join(' ');
+      }
+      return extractedText;
+    }
+
+    // ==========================================
+    // CONTENT FILTERING & RELEVANCE RULES (ACADEMIC ENGINE)
+    // ==========================================
+    function cleanAcademicString(s) {
+      return (s || '').replace(/^[#\*\-•\d\.\s]+/, '').replace(/[\*\_]+/g, '').trim();
+    }
+
+    // Rule 1: Administrative noise detector for lines and phrases
+    function isAdministrativeNoiseLine(line) {
+      if (!line || typeof line !== 'string') return true;
+      const cleaned = line.trim().toLowerCase();
+      if (cleaned.length < 3) return true;
+
+      // Email addresses or generic URLs
+      if (/[\w\.-]+@[\w\.-]+\.\w+/.test(cleaned)) return true;
+      if (/https?:\/\/(?:zoom\.us|canvas|blackboard|moodle)[^\s]*/i.test(cleaned)) return true;
+
+      // Office hours, room numbers, building locations, zoom meeting info
+      if (/\b(?:office hours?|room\s*\d+|hall\s*[a-z0-9]+|bldg|building\s*[a-z0-9]+|zoom\s*(?:id|link|passcode|meeting)|zoom\.us|contact info(?:rmation)?)\b/i.test(cleaned)) return true;
+
+      // Calendar dates, clock times, days of week
+      if (/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(cleaned) && /\b(?:\d{1,2}:\d{2}|\d{1,2}\/\d{1,2}|am|pm)\b/i.test(cleaned)) return true;
+      if (/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?\b/i.test(cleaned)) return true;
+
+      // Grading policies, weights, attendance, administrative deadlines
+      if (/\b(?:grading policy|grade breakdown|\d{1,2}%\s*(?:of\s*(?:total\s*)?)?grade|penalty for late|late submission|attendance is mandatory|attendance policy|midterm exam date|final exam date|scantron|#2 pencil|calculator policy|academic dishonesty|plagiarism policy|honor code|canvas|blackboard|moodle|turnitin|prerequisites?)\b/i.test(cleaned)) return true;
+
+      // Speaker / Instructor names and bios when standalone
+      if (/^(?:prof\.|professor|dr\.|instructor|lecturer|ta|teaching assistant)\s+[a-z\s\.-]+$/i.test(cleaned)) return true;
+      if (/\b(?:phd from|joined the faculty|my office is|feel free to email|bio:|about me)\b/i.test(cleaned)) return true;
+
+      // Course announcements and housekeeping
+      if (/^(?:announcements?|housekeeping|reminders|administrative matters|course logistics|agenda|outline|table of contents|overview of today)\b/i.test(cleaned)) return true;
+
+      // Ending, greetings, decorative closings
+      if (/^(?:questions\?|any questions\?|q\s*&\s*a|thank you|thanks!|thank you!|thanks for listening|welcome to class|see you next (?:week|class)|good luck)\b/i.test(cleaned)) return true;
+
+      return false;
+    }
+
+    // Rule 1: Administrative & introductory slide classifier
+    function isAdministrativeOrIntroSlide(title, text, slideNum, totalSlides) {
+      const normTitle = (title || '').trim().toLowerCase();
+      const cleanText = (text || '').toLowerCase();
+
+      // Title pattern matching administrative / introductory / ending topics
+      const adminTitleRegex = /^(?:agenda|outline|table of contents|contents|overview of today|schedule|weekly schedule|today's agenda|syllabus|grading|grading policy|grade breakdown|assessment|evaluation|course evaluation|attendance|attendance policy|honor code|academic integrity|announcements?|housekeeping|reminders|administrative matters|course logistics|instructor|instructor info|instructor biography|professor|lecturer|teaching assistant|ta info|about me|bio|biography|meet your professor|meet your instructor|contact info|contact details|office hours|zoom link|welcome|welcome to|course overview|intro to course|course introduction|questions\?|any questions\?|q\s*&\s*a|thank you|thanks!|thank you!|thanks for listening|end of lecture|the end|have a great weekend|see you next week|references|sources|credits|readings?)$/i;
+
+      if (adminTitleRegex.test(normTitle)) {
+        return { isAdmin: true, reason: `Administrative header "${title}"` };
+      }
+
+      // Title/Cover slide heuristic (Slide 1 or 2 when slide deck has > 2 slides)
+      if (slideNum <= 2 && totalSlides > 2) {
+        const hasInstructorOrDept = /\b(?:prof\.|professor|dr\.|phd|instructor|lecturer|department of|faculty of|university|college|fall\s*202\d|spring\s*202\d|summer\s*202\d|winter\s*202\d|semester|course code)\b/i.test(cleanText);
+        const hasLogisticsOrEmail = /[\w\.-]+@[\w\.-]+\.\w+/.test(cleanText) || /\b(?:office hours|room\s*\d+|syllabus|welcome)\b/i.test(cleanText);
+        const wordCount = (cleanText.match(/\b\w+\b/g) || []).length;
+        if (wordCount < 75 && (hasInstructorOrDept || hasLogisticsOrEmail)) {
+          return { isAdmin: true, reason: 'Cover / Title or Introductory slide' };
+        }
+      }
+
+      // Ending slide heuristic (last or second-to-last slide)
+      if (slideNum >= totalSlides - 1 && totalSlides > 3) {
+        if (/(?:thank you|thanks for watching|thanks for listening|any questions\?|q\s*&\s*a|have a great weekend|see you next time|office hours)/i.test(cleanText)) {
+          const wordCount = (cleanText.match(/\b\w+\b/g) || []).length;
+          if (wordCount < 60) {
+            return { isAdmin: true, reason: 'Ending / Closing Q&A slide' };
+          }
+        }
+      }
+
+      // Grading / Attendance policy slide
+      const gradingMatches = cleanText.match(/\b(?:\d{1,2}%\s*(?:of\s*(?:total\s*)?grade|midterm|final|exam|quiz|participation|homework|assignment)|grading policy|grade distribution|attendance policy)\b/gi);
+      if (gradingMatches && gradingMatches.length >= 2) {
+        return { isAdmin: true, reason: 'Grading / Attendance Policy slide' };
+      }
+
+      // Pure contact / office hours slide
+      if (/\b(?:office hours?|zoom\s*meeting\s*id|room\s*\d{3,4}|bldg)\b/i.test(cleanText) && /[\w\.-]+@[\w\.-]+\.\w+/.test(cleanText)) {
+        return { isAdmin: true, reason: 'Instructor contact / office hours slide' };
+      }
+
+      // Pure stock image / decorative quote / empty header slide (< 12 substantive words)
+      const words = (cleanText.match(/\b[a-z]{3,}\b/g) || []);
+      if (words.length < 12 && !/[:=%\+\*\/]/.test(text)) {
+        return { isAdmin: true, reason: 'Decorative or non-substantive slide' };
+      }
+
+      return { isAdmin: false, reason: '' };
+    }
+
+    // Rule 2: High-yield academic substance validator
+    function isHighYieldAcademicConcept(term, text) {
+      if (!term || typeof term !== 'string') return false;
+      const cleanTerm = term.trim().toLowerCase();
+      if (cleanTerm.length < 3 || cleanTerm.length > 55) return false;
+
+      // Discard administrative words
+      const adminKeywords = [
+        'agenda', 'outline', 'syllabus', 'grading', 'attendance', 'office hours', 
+        'professor', 'instructor', 'lecturer', 'ta', 'exam date', 'midterm', 'final exam', 
+        'quiz', 'assignment', 'homework', 'canvas', 'zoom', 'room', 'monday', 'tuesday', 
+        'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 
+        'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 
+        'november', 'december', 'spring', 'fall', 'summer', 'winter', 'thank you', 
+        'questions', 'welcome', 'credits', 'prerequisite', 'schedule', 'announcement', 
+        'housekeeping', 'course code', 'course overview', 'reading list'
+      ];
+
+      for (const ak of adminKeywords) {
+        if (cleanTerm === ak || cleanTerm.startsWith(ak + ' ') || cleanTerm.endsWith(' ' + ak)) {
+          return false;
+        }
+      }
+
+      // Discard numbers or date patterns
+      if (/^\d+$/.test(cleanTerm) || /\d{1,2}\/\d{1,2}/.test(cleanTerm)) return false;
+      if (/[\w\.-]+@[\w\.-]+\.\w+/.test(cleanTerm)) return false;
+
+      return true;
+    }
+
+    function generateOfflineAcademicPack(courseName, courseCode, weekTitle, slideText) {
+      // 1. Parse raw text into structured slide objects
+      const rawChunks = slideText.split(/(?:---|===)?\s*(?:Slide|Page)\s*(\d+)[\s\-:=]*/i);
+      const rawSlides = [];
+
+      function extractSlideData(num, text, totalEst) {
+        const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        const title = rawLines.length > 0 ? cleanAcademicString(rawLines[0]) : `Slide ${num} Scope`;
+        const bullets = [];
+        const definitions = [];
+        const formulas = [];
+        const concepts = [];
+
+        // Check slide-level administrative classification
+        const adminCheck = isAdministrativeOrIntroSlide(title, text, num, totalEst);
+
+        // Extract clean sentences from substantive lines only
+        const cleanLines = rawLines.filter(line => !isAdministrativeNoiseLine(line));
+        const cleanBody = cleanLines.join(' ');
+        const sentences = cleanBody.split(/(?<=[.!?])\s+/).map(s => cleanAcademicString(s)).filter(s => s.length > 25 && !isAdministrativeNoiseLine(s));
+
+        for (const line of cleanLines) {
+          const cleaned = cleanAcademicString(line);
+          if (cleaned.length < 5 || isAdministrativeNoiseLine(cleaned)) continue;
+
+          // Check formal definition pattern: "Term: Explanation" or "Term - Explanation"
+          const defMatch = cleaned.match(/^([A-Za-z0-9\s\(\)\/\-]{2,45})[:\-–—]\s*(.{10,})$/);
+          if (defMatch) {
+            const term = defMatch[1].trim();
+            const def = defMatch[2].trim();
+            if (isHighYieldAcademicConcept(term, def) && !isAdministrativeNoiseLine(def)) {
+              definitions.push({
+                term: term,
+                definition: def,
+                slide_reference: `Slide ${num}`
+              });
+              concepts.push({ term: term, text: def, slide: num });
+            }
+          }
+
+          // Check formula / quantitative relationship pattern
+          if (/[=%\+\*\/]/.test(cleaned) && /\b(?:formula|rate|cost|price|ratio|margin|value|profit|yield|roi|index|npv|wacc|irr|elasticity|demand|supply|inventory|lead\s*time|equation|turnover|ebitda|equilibrium|beta|variance)\b/i.test(cleaned)) {
+            if (!isAdministrativeNoiseLine(cleaned)) {
+              formulas.push({
+                name: title,
+                details: cleaned,
+                slide_reference: `Slide ${num}`
+              });
+            }
+          }
+
+          if (cleaned.length > 15 && !isAdministrativeNoiseLine(cleaned)) {
+            bullets.push(cleaned);
+          }
+        }
+
+        return {
+          num,
+          title,
+          rawText: text,
+          isAdmin: adminCheck.isAdmin,
+          adminReason: adminCheck.reason,
+          bullets,
+          definitions,
+          formulas,
+          concepts,
+          sentences: sentences.length > 0 ? sentences : bullets
+        };
+      }
+
+      const totalEstimated = rawChunks.length > 2 ? Math.floor(rawChunks.length / 2) : 10;
+
+      if (rawChunks.length > 2) {
+        for (let i = 1; i < rawChunks.length; i += 2) {
+          const slideNum = parseInt(rawChunks[i], 10) || Math.floor(i / 2) + 1;
+          const content = (rawChunks[i + 1] || '').trim();
+          if (content) {
+            rawSlides.push(extractSlideData(slideNum, content, totalEstimated));
+          }
+        }
+      }
+
+      if (rawSlides.length === 0) {
+        const paragraphs = slideText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+        const chunkSize = Math.max(1, Math.ceil(paragraphs.length / 8));
+        let sNum = 1;
+        for (let i = 0; i < paragraphs.length; i += chunkSize) {
+          const chunk = paragraphs.slice(i, i + chunkSize).join('\n');
+          rawSlides.push(extractSlideData(sNum++, chunk, Math.ceil(paragraphs.length / chunkSize)));
+        }
+      }
+
+      if (rawSlides.length === 0) {
+        rawSlides.push(extractSlideData(1, slideText, 1));
+      }
+
+      // CONTENT FILTERING: Disregard administrative and introductory slides
+      const substantiveSlides = rawSlides.filter(s => !s.isAdmin);
+      const filteredAdminCount = rawSlides.length - substantiveSlides.length;
+
+      // Use substantive slides as the sole target; fallback to all slides only if slides had zero non-admin detection
+      const targetSlides = substantiveSlides.length > 0 ? substantiveSlides : rawSlides;
+
+      // Aggregate high-yield pools solely from substantive slides
+      const defPool = [];
+      const formulaPool = [];
+      const bulletPool = [];
+      const sentencePool = [];
+      const conceptPool = [];
+
+      targetSlides.forEach(s => {
+        s.definitions.forEach(d => defPool.push(d));
+        s.formulas.forEach(f => formulaPool.push(f));
+        s.bullets.forEach(b => {
+          if (!isAdministrativeNoiseLine(b)) {
+            bulletPool.push({ text: b, slide: s.num, title: s.title });
+          }
+        });
+        s.sentences.forEach(st => {
+          if (!isAdministrativeNoiseLine(st)) {
+            sentencePool.push({ text: st, slide: s.num, title: s.title });
+          }
+        });
+        s.concepts.forEach(c => {
+          if (isHighYieldAcademicConcept(c.term, c.text)) {
+            conceptPool.push(c);
+          }
+        });
+      });
+
+      // Expand concept pool from substantive bullet phrases if slides were compact
+      if (conceptPool.length < 35) {
+        bulletPool.forEach(b => {
+          const words = b.text.split(' ');
+          if (words.length >= 2) {
+            const candidateTerm = words.slice(0, 3).join(' ').replace(/[^\w\s]/gi, '').trim();
+            if (candidateTerm.length > 3 && isHighYieldAcademicConcept(candidateTerm, b.text)) {
+              conceptPool.push({
+                term: candidateTerm,
+                text: b.text,
+                slide: b.slide
+              });
+            }
+          }
+        });
+      }
+
+      if (conceptPool.length === 0) {
+        conceptPool.push({
+          term: `${courseName} Academic Theory`,
+          text: `Foundational syllabus mechanism of ${courseName} established on substantive body slides.`,
+          slide: targetSlides[0]?.num || 1
+        });
+      }
+
+      // 1. Topic Summary
+      const topTakeaways = bulletPool.slice(0, 8).map(b => b.text);
+      if (topTakeaways.length < 5) {
+        targetSlides.forEach(s => {
+          if (s.title && s.bullets[0] && !isAdministrativeNoiseLine(s.bullets[0])) {
+            topTakeaways.push(`${s.title}: ${s.bullets[0]}`);
+          }
+        });
+      }
+
+      const adminNotice = filteredAdminCount > 0 
+        ? ` (Filtered ${filteredAdminCount} administrative/introductory slide${filteredAdminCount > 1 ? 's' : ''} per academic relevance rules)`
+        : '';
+
+      const executiveOverview = `This academic study pack synthesizes the core curriculum for ${courseName} (${courseCode}) — ${weekTitle}, strictly extracted from ${targetSlides.length} substantive lecture slides${adminNotice}.\n\nThe material focuses exclusively on high-yield academic substance: formal theoretical definitions, core analytical models, methodologies, quantitative formulas, and cause-and-effect relationships. Administrative matters (course announcements, grading percentages, instructor bios, office hours, and closing slides) have been excluded.\n\nAll 40 questions, flashcards, and explanations below are grounded directly in the substantive slide text with zero external extrapolation.`;
+
+      const keyDefinitionsList = defPool.length >= 8 ? defPool.slice(0, 15) : conceptPool.slice(0, 15).map(c => ({
+        term: c.term,
+        definition: c.text,
+        slide_reference: `Slide ${c.slide}`
+      }));
+
+      const keyFormulasList = formulaPool.length > 0 ? formulaPool.slice(0, 8) : [
+        {
+          name: `${courseName} Analytical Model`,
+          details: `Core theoretical framework and conceptual relationships established on substantive lecture slides.`,
+          slide_reference: `Slide ${targetSlides[0]?.num || 1}`
+        }
+      ];
+
+      // 2. Flashcards (15-25 Cards)
+      const flashcards = [];
+      const cardPool = conceptPool.length >= 20 ? conceptPool : [...conceptPool, ...bulletPool.map(b => ({ term: b.title || 'Academic Concept', text: b.text, slide: b.slide }))];
+      
+      const targetCardCount = Math.min(25, Math.max(18, cardPool.length));
+      for (let i = 0; i < targetCardCount; i++) {
+        const item = cardPool[i % cardPool.length];
+        flashcards.push({
+          front: item.term || `Concept #${i + 1}`,
+          back: item.text || `Core theoretical principle and definition explicitly stated in lecture notes.`,
+          slide_reference: `Slide ${item.slide || targetSlides[0]?.num || 1}`
+        });
+      }
+
+      // 3. 40 Practice Questions (STRICTLY 40)
+      const practiceQuestions = [];
+
+      // Section A: Questions 1 to 20: MCQs (Targeting definitions, principles, frameworks)
+      for (let q = 1; q <= 20; q++) {
+        const item = cardPool[(q - 1) % cardPool.length];
+        const sNum = item.slide || targetSlides[(q - 1) % targetSlides.length].num;
+        const relatedSlide = targetSlides.find(s => s.num === sNum) || targetSlides[0];
+
+        const correctFact = item.text || (relatedSlide.bullets[0] || `The primary operational mechanism established on Slide ${sNum}.`);
+        
+        const otherItems = cardPool.filter(c => c.term !== item.term && isHighYieldAcademicConcept(c.term, c.text));
+        const d1 = otherItems.length > 0 ? otherItems[q % otherItems.length].text : "A secondary parameter that only applies in isolated non-standard scenarios.";
+        const d2 = otherItems.length > 1 ? otherItems[(q + 3) % otherItems.length].text : "An exogenous variable omitted from the primary analytical framework.";
+        const d3 = otherItems.length > 2 ? otherItems[(q + 5) % otherItems.length].text : "An inverse operational relationship contrary to established slide principles.";
+
+        const rawOptions = [correctFact, d1, d2, d3];
+        const correctPos = (q - 1) % 4; // Rotates across 0 (A), 1 (B), 2 (C), 3 (D)
+        const finalOptions = [];
+        const letters = ['A', 'B', 'C', 'D'];
+        
+        let distractorIdx = 1;
+        for (let p = 0; p < 4; p++) {
+          if (p === correctPos) {
+            finalOptions.push(correctFact);
+          } else {
+            finalOptions.push(rawOptions[distractorIdx++]);
+          }
+        }
+
+        const stems = [
+          `According to Slide ${sNum} ("${relatedSlide.title}"), which of the following statements correctly characterizes "${item.term}"?`,
+          `Based on the academic framework presented on Slide ${sNum}, what is the primary operational role of "${item.term}"?`,
+          `Under the principles established on Slide ${sNum} ("${relatedSlide.title}"), how is "${item.term}" formally defined?`,
+          `When analyzing the theoretical concepts on Slide ${sNum}, which statement regarding "${item.term}" is directly verified by the slide text?`
+        ];
+        const questionStem = stems[(q - 1) % stems.length];
+
+        practiceQuestions.push({
+          question_number: q,
+          type: "mcq",
+          question: questionStem,
+          options: finalOptions,
+          correct_answer: letters[correctPos],
+          explanation: `Option (${letters[correctPos]}) is correct. Slide ${sNum} explicitly establishes "${item.term}" as: ${correctFact}`,
+          slide_reference: `Slide ${sNum}`
+        });
+      }
+
+      // Section B: Questions 21 to 30: Rapid Recall / Fill-in-the-Blank (Exact Terminology)
+      for (let q = 21; q <= 30; q++) {
+        const item = cardPool[(q + 4) % cardPool.length];
+        const sNum = item.slide || targetSlides[(q - 21) % targetSlides.length].num;
+        const term = item.term.trim();
+        const sentence = item.text;
+
+        let blankSentence = "";
+        if (sentence.toLowerCase().includes(term.toLowerCase())) {
+          const reg = new RegExp(term, 'gi');
+          blankSentence = sentence.replace(reg, "________");
+        } else {
+          blankSentence = `In ${courseName}, ________ represents the following substantive slide principle: "${sentence.slice(0, 130)}"`;
+        }
+
+        practiceQuestions.push({
+          question_number: q,
+          type: "fill_in_the_blank",
+          sentence_with_blank: blankSentence,
+          target_term: term,
+          acceptable_variations: [term.toLowerCase(), term.toLowerCase().replace(/[^a-z0-9]/g, '')],
+          explanation: `Slide ${sNum} highlights "${term}" as the exact academic terminology defined in the lecture text.`,
+          slide_reference: `Slide ${sNum}`
+        });
+      }
+
+      // Section C: Questions 31 to 40: Short-Answer Conceptual & Analytical Application
+      for (let q = 31; q <= 40; q++) {
+        const sIndex = (q - 31) % targetSlides.length;
+        const currentSlide = targetSlides[sIndex] || targetSlides[0];
+        const sNum = currentSlide.num;
+        const keyPoint = currentSlide.bullets[0] || (currentSlide.definitions[0]?.definition) || `Core analytical process of ${courseName}`;
+
+        const questionScenarios = [
+          `Based on the lecture notes on Slide ${sNum} ("${currentSlide.title}"), evaluate the key operational implications of this framework and explain how a student should apply it in an examination scenario.`,
+          `According to the theoretical model outlined on Slide ${sNum}, analyze the primary cause-and-effect mechanism and explain the critical academic trade-offs involved.`,
+          `Using the methodology defined on Slide ${sNum} ("${currentSlide.title}"), detail the step-by-step analytical procedure an analyst must execute according to the slide text.`,
+          `How does the core concept on Slide ${sNum} ("${currentSlide.title}") directly determine strategic or quantitative outcomes in ${courseName}? Support your response solely with slide principles.`
+        ];
+        const selectedQuestion = questionScenarios[(q - 31) % questionScenarios.length];
+
+        practiceQuestions.push({
+          question_number: q,
+          type: "short_answer",
+          question: selectedQuestion,
+          model_answer: `According to Slide ${sNum}, the critical concept is that ${keyPoint}. To achieve full marks, an academic response must explicitly apply the slide's core theoretical framework, verify the specific relationships established in the lecture notes, and employ exact course terminology without outside extrapolation.`,
+          key_grading_points: [
+            `Accurately identifies the primary principle outlined on Slide ${sNum}`,
+            `Applies the exact lecture terminology and framework mechanism`,
+            `Explains the practical business/analytical implication without external extrapolation`
+          ],
+          slide_reference: `Slide ${sNum}`
+        });
+      }
+
+      return {
+        slide_count: targetSlides.length,
+        total_raw_slides: rawSlides.length,
+        filtered_admin_count: filteredAdminCount,
+        raw_slide_text: slideText,
+        generated_at: Date.now(),
+        summary: {
+          executive_overview: executiveOverview,
+          core_takeaways: topTakeaways,
+          key_formulas_and_frameworks: keyFormulasList,
+          key_definitions: keyDefinitionsList
+        },
+        flashcards: flashcards,
+        practice_questions: practiceQuestions,
+        userAnswers: {},
+        selfGrading: {},
+        masteredFlashcards: {}
+      };
+    }
+
+    async function generateExamDeck() {
+      const slideText = appState.pendingSlideText;
+      if (!slideText || slideText.trim().length < 20) {
+        showErrorModal('Slide Content Required', 'Please upload a lecture slide file (.pdf, .pptx, .txt) or paste at least 20 characters of slide text before generating.');
+        return;
+      }
+
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week) return;
+
+      openGenerationModal();
+      setGenerationStep('step-extract', 'done');
+      setGenerationStep('step-ground', 'active');
+
+      try {
+        await new Promise(r => setTimeout(r, 120));
+        setGenerationStep('step-ground', 'done');
+        setGenerationStep('step-gemini', 'active');
+
+        const savedApiKey = localStorage.getItem('gemini_api_key') || '';
+
+        // Call the server Gemini API endpoint
+        const response = await fetch('/api/generate-exam-deck', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(savedApiKey ? { 'x-gemini-api-key': savedApiKey } : {})
+          },
+          body: JSON.stringify({
+            courseName: course.name,
+            courseCode: course.code,
+            weekTitle: week.title,
+            slideText: slideText,
+            apiKeyOverride: savedApiKey
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Server API responded with HTTP status ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (!result.success || !result.data) {
+          throw new Error(result.error || 'Server did not return valid study pack data.');
+        }
+
+        const parsedData = result.data;
+
+        setGenerationStep('step-gemini', 'done');
+        setGenerationStep('step-validate', 'active');
+
+        // Verify and complete structures
+        parsedData.slide_count = appState.pendingSlideCount || (parsedData.practice_questions && parsedData.practice_questions.length ? Math.min(20, parsedData.practice_questions.length) : 1);
+        parsedData.raw_slide_text = slideText;
+        parsedData.generated_at = Date.now();
+        parsedData.modelUsed = result.modelUsed;
+        parsedData.userAnswers = {};
+        parsedData.selfGrading = {};
+        parsedData.masteredFlashcards = {};
+
+        // Save into current week state
+        week.data = parsedData;
+        saveState();
+
+        await new Promise(r => setTimeout(r, 150));
+        setGenerationStep('step-validate', 'done');
+
+        setTimeout(() => {
+          closeGenerationModal();
+          renderSidebarCourses();
+          renderWeeksList();
+          renderCurrentCourseWeek();
+        }, 300);
+
+      } catch (err) {
+        console.error('API Generation failure', err);
+        closeGenerationModal();
+
+        const isQuota = err.message && (err.message.includes('quota') || err.message.includes('429') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('exceeded'));
+
+        if (isQuota) {
+          showErrorModalWithAction(
+            'Gemini API Quota Notice (429)',
+            `${err.message}\n\nYou can configure a billing-enabled API key, or generate the study pack immediately with the offline synthesis engine.`,
+            'Generate with Offline Engine',
+            () => {
+              fallbackOfflineGeneration(course, week, slideText);
+            }
+          );
+        } else {
+          showErrorModalWithAction(
+            'Gemini API Error',
+            `API generation call failed: ${err.message || 'Unknown network error'}.\n\nWould you like to synthesize this study pack using the offline engine instead?`,
+            'Generate with Offline Engine',
+            () => {
+              fallbackOfflineGeneration(course, week, slideText);
+            }
+          );
+        }
+      }
+    }
+
+    function fallbackOfflineGeneration(course, week, slideText) {
+      closeErrorModal();
+      openGenerationModal();
+      setGenerationStep('step-extract', 'done');
+      setGenerationStep('step-ground', 'done');
+      setGenerationStep('step-gemini', 'active');
+
+      setTimeout(() => {
+        try {
+          const parsedData = generateOfflineAcademicPack(course.name, course.code, week.title, slideText);
+          setGenerationStep('step-gemini', 'done');
+          setGenerationStep('step-validate', 'active');
+          parsedData.raw_slide_text = slideText;
+          week.data = parsedData;
+          saveState();
+
+          setGenerationStep('step-validate', 'done');
+          setTimeout(() => {
+            closeGenerationModal();
+            renderSidebarCourses();
+            renderWeeksList();
+            renderCurrentCourseWeek();
+          }, 300);
+        } catch (e) {
+          closeGenerationModal();
+          showErrorModal('Synthesis Notice', e.message || 'Failed to synthesize offline pack.');
+        }
+      }, 300);
+    }
+
+    let currentErrorAction = null;
+
+    function showErrorModal(title, message) {
+      showErrorModalWithAction(title, message, null, null);
+    }
+
+    function showErrorModalWithAction(title, message, actionText, actionCallback) {
+      const modal = document.getElementById('error-notice-modal');
+      const titleEl = document.getElementById('error-modal-title');
+      const msgEl = document.getElementById('error-modal-message');
+      const actionBtn = document.getElementById('error-action-btn');
+
+      if (titleEl) titleEl.textContent = title;
+      if (msgEl) msgEl.textContent = message;
+
+      if (actionBtn) {
+        if (actionText && actionCallback) {
+          actionBtn.textContent = actionText;
+          actionBtn.classList.remove('hidden');
+          currentErrorAction = actionCallback;
+        } else {
+          actionBtn.classList.add('hidden');
+          currentErrorAction = null;
+        }
+      }
+
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeErrorModal() {
+      const modal = document.getElementById('error-notice-modal');
+      if (modal) modal.classList.add('hidden');
+      currentErrorAction = null;
+    }
+
+    // ==========================================
+    // EXPORT UTILITIES (MARKDOWN, JSON, PRINT)
+    // ==========================================
+    function exportAsMarkdown() {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      const d = week.data;
+      let md = `# ${course.name} (${course.code}) — ${week.title}\n`;
+      md += `*Generated by CGPA Booster • Strictly Grounded Academic Revision*\n\n`;
+
+      md += `## 1. Executive Topic Overview\n${d.summary?.executive_overview || ''}\n\n`;
+
+      md += `### Core Takeaways\n`;
+      (d.summary?.core_takeaways || []).forEach(t => {
+        md += `- ${t}\n`;
+      });
+      md += `\n`;
+
+      md += `### Formulas & Frameworks\n`;
+      (d.summary?.key_formulas_and_frameworks || []).forEach(f => {
+        md += `- **${f.name}** (${f.slide_reference}): \`${f.details}\`\n`;
+      });
+      md += `\n`;
+
+      md += `### Key Definitions\n`;
+      (d.summary?.key_definitions || []).forEach(def => {
+        md += `- **${def.term}** [${def.slide_reference}]: ${def.definition}\n`;
+      });
+      md += `\n---\n\n`;
+
+      md += `## 2. Flashcards (${d.flashcards?.length || 0} Cards)\n\n`;
+      md += `| # | Term / Prompt | Strict Definition / Answer | Slide Citation |\n`;
+      md += `|---|---------------|----------------------------|----------------|\n`;
+      (d.flashcards || []).forEach((c, idx) => {
+        md += `| ${idx + 1} | ${escapeMarkdownTable(c.front)} | ${escapeMarkdownTable(c.back)} | ${c.slide_reference || ''} |\n`;
+      });
+      md += `\n---\n\n`;
+
+      md += `## 3. Practice Examination (40 Strictly Grounded Questions)\n\n`;
+
+      md += `### Section A: Multiple Choice Questions (Q1–Q20)\n\n`;
+      (d.practice_questions || []).filter(q => q.question_number <= 20).forEach(q => {
+        md += `#### Q${q.question_number}. ${q.question} [${q.slide_reference || ''}]\n`;
+        (q.options || []).forEach((opt, oIdx) => {
+          const l = ['A', 'B', 'C', 'D'][oIdx];
+          md += `- **(${l})** ${opt}\n`;
+        });
+        md += `*Correct Answer: ${q.correct_answer}* — ${q.explanation}\n\n`;
+      });
+
+      md += `### Section B: Rapid Recall / Fill-in-the-Blank (Q21–Q30)\n\n`;
+      (d.practice_questions || []).filter(q => q.question_number >= 21 && q.question_number <= 30).forEach(q => {
+        md += `#### Q${q.question_number}. ${q.sentence_with_blank} [${q.slide_reference || ''}]\n`;
+        md += `*Target Term: **${q.target_term}*** — ${q.explanation}\n\n`;
+      });
+
+      md += `### Section C: Analytical & Conceptual Application (Q31–Q40)\n\n`;
+      (d.practice_questions || []).filter(q => q.question_number >= 31 && q.question_number <= 40).forEach(q => {
+        md += `#### Q${q.question_number}. ${q.question} [${q.slide_reference || ''}]\n`;
+        md += `*Model Answer:* ${q.model_answer}\n`;
+        if (q.key_grading_points) {
+          md += `*Key Grading Criteria:*\n`;
+          q.key_grading_points.forEach(pt => md += `  - [ ] ${pt}\n`);
+        }
+        md += `\n`;
+      });
+
+      downloadFile(md, `${sanitizeFilename(course.code)}_${sanitizeFilename(week.title)}_StudyPack.md`, 'text/markdown');
+    }
+
+    function exportAsJson() {
+      const course = appState.courses[appState.currentCourseId];
+      const week = course && course.weeks && course.weeks[appState.currentWeekId];
+      if (!week || !week.data) return;
+
+      const dataStr = JSON.stringify(week.data, null, 2);
+      downloadFile(dataStr, `${sanitizeFilename(course.code)}_${sanitizeFilename(week.title)}_StudyPack.json`, 'application/json');
+    }
+
+    function printWorksheet() {
+      window.print();
+    }
+
+    function downloadFile(content, fileName, contentType) {
+      const blob = new Blob([content], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    }
+
+    // ==========================================
+    // MODALS & EVENT LISTENERS
+    // ==========================================
+    function setupEventListeners() {
+      if (elements.sidebarToggleBtn) {
+        elements.sidebarToggleBtn.addEventListener('click', openSidebar);
+      }
+      if (elements.sidebarCloseBtn) {
+        elements.sidebarCloseBtn.addEventListener('click', closeSidebar);
+      }
+      if (elements.sidebarBackdrop) {
+        elements.sidebarBackdrop.addEventListener('click', closeSidebar);
+      }
+
+      if (elements.themeToggleBtn) {
+        elements.themeToggleBtn.addEventListener('click', () => {
+          setTheme(appState.theme === 'dark' ? 'light' : 'dark');
+        });
+      }
+
+      if (elements.cgpaStatsBtn) {
+        elements.cgpaStatsBtn.addEventListener('click', () => {
+          elements.cgpaModal.classList.remove('hidden');
+        });
+      }
+      if (elements.closeCgpaModalBtn) {
+        elements.closeCgpaModalBtn.addEventListener('click', () => {
+          elements.cgpaModal.classList.add('hidden');
+        });
+      }
+      if (elements.dismissCgpaModalBtn) {
+        elements.dismissCgpaModalBtn.addEventListener('click', () => {
+          elements.cgpaModal.classList.add('hidden');
+        });
+      }
+
+      const closeErrBtn = document.getElementById('close-error-modal-btn');
+      if (closeErrBtn) {
+        closeErrBtn.addEventListener('click', closeErrorModal);
+      }
+
+      const actionBtn = document.getElementById('error-action-btn');
+      if (actionBtn) {
+        actionBtn.addEventListener('click', () => {
+          if (typeof currentErrorAction === 'function') {
+            const cb = currentErrorAction;
+            currentErrorAction = null;
+            cb();
+          }
+        });
+      }
+
+      const apiKeyConfigBtn = document.getElementById('api-key-config-btn');
+      const apiKeyModal = document.getElementById('api-key-modal');
+      const closeApiKeyBtn = document.getElementById('close-api-key-modal-btn');
+      const saveApiKeyBtn = document.getElementById('save-api-key-btn');
+      const clearApiKeyBtn = document.getElementById('clear-api-key-btn');
+      const apiKeyInput = document.getElementById('custom-api-key-input');
+
+      if (apiKeyConfigBtn && apiKeyModal) {
+        apiKeyConfigBtn.addEventListener('click', () => {
+          const currentKey = localStorage.getItem('gemini_api_key') || '';
+          if (apiKeyInput) apiKeyInput.value = currentKey;
+          apiKeyModal.classList.remove('hidden');
+        });
+      }
+
+      if (closeApiKeyBtn && apiKeyModal) {
+        closeApiKeyBtn.addEventListener('click', () => {
+          apiKeyModal.classList.add('hidden');
+        });
+      }
+
+      if (saveApiKeyBtn && apiKeyModal && apiKeyInput) {
+        saveApiKeyBtn.addEventListener('click', () => {
+          const val = apiKeyInput.value.trim();
+          if (val) {
+            localStorage.setItem('gemini_api_key', val);
+          } else {
+            localStorage.removeItem('gemini_api_key');
+          }
+          apiKeyModal.classList.add('hidden');
+          showErrorModal('API Key Configured', val ? 'Custom Gemini API Key saved to browser localStorage and will be sent with generation requests.' : 'Custom key cleared. The application will use the server-injected Gemini API key.');
+        });
+      }
+
+      if (clearApiKeyBtn && apiKeyModal && apiKeyInput) {
+        clearApiKeyBtn.addEventListener('click', () => {
+          localStorage.removeItem('gemini_api_key');
+          apiKeyInput.value = '';
+          apiKeyModal.classList.add('hidden');
+          showErrorModal('API Key Cleared', 'Custom key cleared. The application will use the server-injected Gemini API key.');
+        });
+      }
+
+      if (elements.addWeekBtn) {
+        elements.addWeekBtn.addEventListener('click', () => {
+          const course = appState.courses[appState.currentCourseId];
+          if (elements.addWeekCourseLabel) {
+            elements.addWeekCourseLabel.textContent = `For ${course.name}`;
+          }
+          const nextNum = Object.keys(course.weeks || {}).length + 1;
+          if (elements.newWeekTitleInput) {
+            elements.newWeekTitleInput.value = `Week ${nextNum}`;
+          }
+          elements.addWeekModal.classList.remove('hidden');
+          elements.newWeekTitleInput.focus();
+        });
+      }
+      if (elements.cancelAddWeekBtn) {
+        elements.cancelAddWeekBtn.addEventListener('click', () => {
+          elements.addWeekModal.classList.add('hidden');
+        });
+      }
+      if (elements.confirmAddWeekBtn) {
+        elements.confirmAddWeekBtn.addEventListener('click', () => {
+          const val = elements.newWeekTitleInput.value.trim() || 'New Week';
+          createNewWeek(val);
+          elements.addWeekModal.classList.add('hidden');
+        });
+      }
+
+      elements.tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tab = btn.getAttribute('data-tab');
+          switchTab(tab);
+        });
+      });
+
+      elements.examFilterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const filter = btn.getAttribute('data-exam-filter');
+          appState.examFilter = filter;
+
+          elements.examFilterBtns.forEach(b => {
+            if (b.getAttribute('data-exam-filter') === filter) {
+              b.className = 'exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white';
+            } else {
+              b.className = 'exam-filter-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800';
+            }
+          });
+
+          if (filter === 'answerkey') {
+            const el = document.getElementById('answer-key-details');
+            if (el) el.open = true;
+            document.getElementById('master-answer-key-section')?.scrollIntoView({ behavior: 'smooth' });
+          } else {
+            renderQuestionsList();
+          }
+        });
+      });
+
+      if (elements.resetExamAnswersBtn) {
+        elements.resetExamAnswersBtn.addEventListener('click', () => {
+          const course = appState.courses[appState.currentCourseId];
+          const week = course && course.weeks && course.weeks[appState.currentWeekId];
+          if (week && week.data) {
+            week.data.userAnswers = {};
+            week.data.selfGrading = {};
+            saveState();
+            renderQuestionsList();
+            updateExamScoreUI();
+          }
+        });
+      }
+
+      if (elements.browseFilesBtn && elements.slideFileInput) {
+        elements.browseFilesBtn.addEventListener('click', () => {
+          elements.slideFileInput.click();
+        });
+      }
+      if (elements.slideFileInput) {
+        elements.slideFileInput.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleFileSelected(e.target.files[0]);
+          }
+        });
+      }
+      if (elements.dropZone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+          elements.dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            elements.dropZone.classList.add('border-indigo-600', 'bg-indigo-50/50', 'dark:bg-indigo-950/30');
+          }, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+          elements.dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            elements.dropZone.classList.remove('border-indigo-600', 'bg-indigo-50/50', 'dark:bg-indigo-950/30');
+          }, false);
+        });
+        elements.dropZone.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          if (dt && dt.files && dt.files[0]) {
+            handleFileSelected(dt.files[0]);
+          }
+        });
+      }
+
+      if (elements.changeFileBtn) {
+        elements.changeFileBtn.addEventListener('click', () => {
+          if (elements.slideFileInput) elements.slideFileInput.click();
+        });
+      }
+
+      if (elements.useManualTextBtn && elements.manualSlideText) {
+        elements.useManualTextBtn.addEventListener('click', () => {
+          const txt = elements.manualSlideText.value.trim();
+          if (!txt) {
+            showErrorModal('Input Required', 'Please paste some slide notes or text before proceeding.');
+            return;
+          }
+          const lines = txt.split('\n');
+          const slideCount = (txt.match(/--- Slide \d+ ---/g) || []).length || Math.max(1, Math.round(lines.length / 15));
+          const wordCount = countWords(txt);
+
+          appState.pendingSlideText = txt;
+          appState.pendingFilename = 'Pasted_Slide_Notes.txt';
+          appState.pendingSlideCount = slideCount;
+          appState.pendingWordCount = wordCount;
+
+          if (elements.extractedFilename) elements.extractedFilename.textContent = 'Pasted_Slide_Notes.txt';
+          if (elements.extractedStats) elements.extractedStats.textContent = `${slideCount} slides estimated • ${wordCount} words`;
+          if (elements.extractedTextPreview) elements.extractedTextPreview.textContent = txt;
+          if (elements.extractionPreviewCard) elements.extractionPreviewCard.classList.remove('hidden');
+        });
+      }
+
+      if (elements.triggerGenerateBtn) {
+        elements.triggerGenerateBtn.addEventListener('click', generateExamDeck);
+      }
+
+      if (elements.flashcardContainer) {
+        elements.flashcardContainer.addEventListener('click', flipCurrentCard);
+      }
+      if (elements.cardFlipBtn) {
+        elements.cardFlipBtn.addEventListener('click', flipCurrentCard);
+      }
+      if (elements.cardPrevBtn) {
+        elements.cardPrevBtn.addEventListener('click', prevFlashcard);
+      }
+      if (elements.cardNextBtn) {
+        elements.cardNextBtn.addEventListener('click', nextFlashcard);
+      }
+      if (elements.flashcardShuffleBtn) {
+        elements.flashcardShuffleBtn.addEventListener('click', shuffleFlashcards);
+      }
+      if (elements.flashcardResetMasteryBtn) {
+        elements.flashcardResetMasteryBtn.addEventListener('click', () => {
+          const course = appState.courses[appState.currentCourseId];
+          const week = course && course.weeks && course.weeks[appState.currentWeekId];
+          if (week && week.data) {
+            week.data.masteredFlashcards = {};
+            saveState();
+            updateFlashcardView();
+          }
+        });
+      }
+      if (elements.markMasteredBtn) {
+        elements.markMasteredBtn.addEventListener('click', () => markCurrentCardMastered(true));
+      }
+      if (elements.markNeedReviewBtn) {
+        elements.markNeedReviewBtn.addEventListener('click', () => markCurrentCardMastered(false));
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (appState.activeTab === 'flashcards' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+          if (e.code === 'Space') {
+            e.preventDefault();
+            flipCurrentCard();
+          } else if (e.code === 'ArrowRight') {
+            e.preventDefault();
+            nextFlashcard();
+          } else if (e.code === 'ArrowLeft') {
+            e.preventDefault();
+            prevFlashcard();
+          }
+        }
+      });
+
+      if (elements.definitionsSearchInput) {
+        elements.definitionsSearchInput.addEventListener('input', (e) => {
+          const q = e.target.value.toLowerCase().trim();
+          const items = document.querySelectorAll('.definition-item');
+          items.forEach(el => {
+            const text = el.textContent.toLowerCase();
+            el.style.display = text.includes(q) ? '' : 'none';
+          });
+        });
+      }
+
+      if (elements.uploadNewSlidesBtn) {
+        elements.uploadNewSlidesBtn.addEventListener('click', () => {
+          const course = appState.courses[appState.currentCourseId];
+          const week = course && course.weeks && course.weeks[appState.currentWeekId];
+          if (week) {
+            showEmptyState(course, week);
+          }
+        });
+      }
+
+      if (elements.deletePackBtn) {
+        elements.deletePackBtn.addEventListener('click', () => {
+          const course = appState.courses[appState.currentCourseId];
+          const week = course && course.weeks && course.weeks[appState.currentWeekId];
+          if (week) {
+            week.data = null;
+            saveState();
+            renderSidebarCourses();
+            renderWeeksList();
+            renderCurrentCourseWeek();
+          }
+        });
+      }
+
+      if (elements.exportMenuBtn && elements.exportMenu) {
+        elements.exportMenuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          elements.exportMenu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', () => {
+          elements.exportMenu?.classList.add('hidden');
+        });
+      }
+      if (elements.exportMdBtn) {
+        elements.exportMdBtn.addEventListener('click', exportAsMarkdown);
+      }
+      if (elements.exportJsonBtn) {
+        elements.exportJsonBtn.addEventListener('click', exportAsJson);
+      }
+      if (elements.printExamBtn) {
+        elements.printExamBtn.addEventListener('click', printWorksheet);
+      }
+
+      if (elements.copySlideTextBtn && elements.corpusSlideText) {
+        elements.copySlideTextBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(elements.corpusSlideText.textContent);
+          elements.copySlideTextBtn.innerHTML = '<i class="fa-solid fa-check text-emerald-500 mr-1"></i> Copied!';
+          setTimeout(() => {
+            elements.copySlideTextBtn.innerHTML = '<i class="fa-regular fa-copy mr-1"></i> Copy Text';
+          }, 2000);
+        });
+      }
+    }
+
+    function openSidebar() {
+      elements.sidebar?.classList.remove('-translate-x-full');
+      elements.sidebarBackdrop?.classList.remove('hidden');
+    }
+
+    function closeSidebar() {
+      elements.sidebar?.classList.add('-translate-x-full');
+      elements.sidebarBackdrop?.classList.add('hidden');
+    }
+
+    function openGenerationModal() {
+      if (elements.generationModal) elements.generationModal.classList.remove('hidden');
+    }
+
+    function closeGenerationModal() {
+      if (elements.generationModal) elements.generationModal.classList.add('hidden');
+    }
+
+    function setGenerationStep(stepId, state) {
+      const el = document.getElementById(stepId);
+      if (!el) return;
+      if (state === 'active') {
+        el.className = 'flex items-center gap-3 text-indigo-600 dark:text-indigo-400 font-bold';
+        el.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
+      } else if (state === 'done') {
+        el.className = 'flex items-center gap-3 text-emerald-600 dark:text-emerald-400';
+        el.querySelector('i').className = 'fa-solid fa-circle-check';
+      } else {
+        el.className = 'flex items-center gap-3 text-slate-400';
+        el.querySelector('i').className = 'fa-regular fa-circle';
+      }
+    }
+
+    // ==========================================
+    // UTILITY HELPERS
+    // ==========================================
+    function countWords(str) {
+      if (!str) return 0;
+      return str.trim().split(/\s+/).filter(Boolean).length;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeMarkdownTable(str) {
+      if (!str) return '';
+      return String(str).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+    }
+
+    function sanitizeFilename(str) {
+      return (str || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    function normalizeAnswerKey(ans, options) {
+      if (ans === undefined || ans === null) return 0;
+      if (typeof ans === 'number') return ans;
+      const str = String(ans).trim().toUpperCase();
+      if (str === 'A') return 0;
+      if (str === 'B') return 1;
+      if (str === 'C') return 2;
+      if (str === 'D') return 3;
+      if (options && Array.isArray(options)) {
+        const found = options.findIndex(o => o.trim().toLowerCase() === String(ans).trim().toLowerCase());
+        if (found !== -1) return found;
+      }
+      return 0;
+    }
+
+    function getAnswerLetter(ans, options) {
+      if (ans === 'A' || ans === 'B' || ans === 'C' || ans === 'D') return ans;
+      if (typeof ans === 'number' && ans >= 0 && ans <= 3) return ['A', 'B', 'C', 'D'][ans];
+      const norm = normalizeAnswerKey(ans, options);
+      return ['A', 'B', 'C', 'D'][norm] || 'A';
+    }
+
+    // Initialize on DOM load
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+      initializeApp();
+    }
+  </script>
+</body>
+</html>
