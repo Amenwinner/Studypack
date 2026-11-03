@@ -10,10 +10,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+// Port 3000 is required by the dev environment container and nginx proxy
+const PORT = 3000;
 
 // Middleware for parsing JSON with generous limits for large slide texts
 app.use(express.json({ limit: '50mb' }));
+
+// Enable CORS and handle preflight requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-gemini-api-key');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 // Helper to instantiate Gemini client with required User-Agent
 function getGenAIClient(customApiKey?: string): GoogleGenAI {
@@ -161,8 +173,16 @@ CRITICAL RULES:
 5. Output MUST be valid, parseable JSON.`;
 }
 
+// GET helper for endpoint verification
+app.get(['/api/generate-exam-deck', '/api/generate-exam-deck/'], (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'This endpoint accepts POST requests with { courseName, courseCode, weekTitle, slideText }'
+  });
+});
+
 // Full Server-Side Generation Endpoint with Multi-Model Quota Resilience
-app.post('/api/generate-exam-deck', async (req, res) => {
+app.post(['/api/generate-exam-deck', '/api/generate-exam-deck/'], async (req, res) => {
   try {
     const { courseName, courseCode, weekTitle, slideText, apiKeyOverride } = req.body;
     const clientKey = (req.headers['x-gemini-api-key'] as string) || apiKeyOverride;

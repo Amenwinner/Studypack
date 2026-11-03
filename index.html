@@ -161,10 +161,10 @@
         <!-- Right Utilities: Server-Side AI Badge, Dark Mode, CGPA Plan -->
         <div class="flex items-center gap-2 sm:gap-3">
           <!-- Gemini API Status Badge -->
-          <div id="ai-server-badge" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300/80 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 shadow-xs" title="Connected to Server Gemini API">
+          <div id="ai-server-badge" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300/80 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 shadow-xs cursor-pointer" title="System Environment & Hosting Status">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <i class="fa-solid fa-wand-magic-sparkles text-[11px] text-indigo-600 dark:text-indigo-400"></i>
-            <span class="hidden sm:inline">Gemini API Connected</span>
+            <i id="ai-server-badge-icon" class="fa-solid fa-wand-magic-sparkles text-[11px] text-indigo-600 dark:text-indigo-400"></i>
+            <span class="hidden sm:inline" id="ai-server-badge-text">Examiner Connected</span>
           </div>
 
           <!-- API Key Config Button -->
@@ -383,15 +383,61 @@
                 <div id="extracted-text-preview" class="mt-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl max-h-36 overflow-y-auto text-[11px] font-mono border border-slate-200 dark:border-slate-800 whitespace-pre-wrap"></div>
               </details>
 
+              <!-- Engine Selector & Environment Status -->
+              <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2 mb-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <i class="fa-solid fa-microchip text-indigo-500"></i>
+                      <span>Synthesis Engine:</span>
+                    </span>
+                    <span id="hosting-env-badge" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <span>Auto-Detecting</span>
+                    </span>
+                  </div>
+                  <span id="engine-status-desc" class="text-[11px] text-slate-500 dark:text-slate-400">
+                    Zero-config • Instant on GitHub Pages
+                  </span>
+                </div>
+
+                <!-- Mode selection buttons -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1" id="engine-mode-group">
+                  <button type="button" data-engine-mode="auto" class="engine-mode-btn p-2 rounded-lg border text-left text-xs transition-all border-indigo-500 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-100 font-semibold shadow-xs">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold">Auto (Smart)</span>
+                      <i class="fa-solid fa-bolt text-[10px] text-indigo-500"></i>
+                    </div>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-normal">API if available, else Instant Engine</p>
+                  </button>
+
+                  <button type="button" data-engine-mode="academic" class="engine-mode-btn p-2 rounded-lg border text-left text-xs transition-all border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-300 font-normal">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold">Academic Engine</span>
+                      <i class="fa-solid fa-graduation-cap text-[10px] text-emerald-500"></i>
+                    </div>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Instant • 0 API Calls • 100% Offline</p>
+                  </button>
+
+                  <button type="button" data-engine-mode="gemini" class="engine-mode-btn p-2 rounded-lg border text-left text-xs transition-all border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-300 font-normal">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold">Gemini AI</span>
+                      <i class="fa-solid fa-wand-magic-sparkles text-[10px] text-violet-500"></i>
+                    </div>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Direct Client REST / Server Key</p>
+                  </button>
+                </div>
+              </div>
+
               <!-- Generate CTA -->
-              <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                <div class="text-[11px] text-slate-500 dark:text-slate-400">
-                  <i class="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-1"></i>
-                  Gemini API generation with content filtering & strict slide grounding.
+              <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                <div class="text-[11px] text-slate-500 dark:text-slate-400" id="generate-status-caption">
+                  <i class="fa-solid fa-shield-halved text-emerald-500 mr-1"></i>
+                  Content filtering: ignores administrative slides, targets core academic syllabus only.
                 </div>
                 <button id="trigger-generate-btn" class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2">
                   <i class="fa-solid fa-wand-magic-sparkles"></i>
-                  <span>Generate 40-Question Exam Deck (Gemini API)</span>
+                  <span id="trigger-btn-label">Generate 40-Question Exam Deck</span>
                 </button>
               </div>
             </div>
@@ -913,13 +959,21 @@ Course objectives and scope...
       </div>
 
       <div class="space-y-3 text-xs">
-        <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
-          The app automatically uses the server-injected <code class="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">GEMINI_API_KEY</code>. You can also specify an optional custom Gemini API key below to override or bypass project quota limits.
-        </p>
+        <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-slate-700 dark:text-slate-300">
+          <p class="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 mb-1">
+            <i class="fa-brands fa-github text-sm"></i>
+            <span>GitHub Pages & Static Hosting Architecture:</span>
+          </p>
+          <p class="leading-relaxed text-[11px]">
+            • <strong>Built-in Academic Engine:</strong> Runs 100% offline in your browser with zero API keys, zero cost, and zero 405 errors.<br/>
+            • <strong>Gemini AI Direct:</strong> On static hosts like GitHub Pages, entering your personal API key allows the browser to call Google's Gemini API directly without needing a backend server.
+          </p>
+        </div>
 
         <div>
-          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Custom Gemini API Key (Saved in browser)</label>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Personal Gemini API Key (Saved in browser localStorage)</label>
           <input type="password" id="custom-api-key-input" placeholder="AIzaSy..." class="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <p class="text-[10px] text-slate-400 mt-1">Leave empty to use the built-in Academic Engine on GitHub Pages, or get a key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-indigo-500 underline">aistudio.google.com</a>.</p>
         </div>
 
         <div class="flex items-center justify-between pt-2">
@@ -971,6 +1025,8 @@ Course objectives and scope...
       courses: {},
       activeTab: 'summary', // 'summary', 'flashcards', 'exam', 'slides'
       examFilter: 'all', // 'all', 'mcq', 'fill', 'short', 'answerkey'
+      engineMode: 'auto', // 'auto', 'academic', 'gemini'
+      isStaticHost: false,
       
       // Temporary Upload State
       pendingSlideText: '',
@@ -1041,6 +1097,13 @@ Course objectives and scope...
       extractedTextPreview: document.getElementById('extracted-text-preview'),
       changeFileBtn: document.getElementById('change-file-btn'),
       triggerGenerateBtn: document.getElementById('trigger-generate-btn'),
+      triggerBtnLabel: document.getElementById('trigger-btn-label'),
+      hostingEnvBadge: document.getElementById('hosting-env-badge'),
+      engineStatusDesc: document.getElementById('engine-status-desc'),
+      engineModeBtns: document.querySelectorAll('.engine-mode-btn'),
+      aiServerBadge: document.getElementById('ai-server-badge'),
+      aiServerBadgeIcon: document.getElementById('ai-server-badge-icon'),
+      aiServerBadgeText: document.getElementById('ai-server-badge-text'),
       manualSlideText: document.getElementById('manual-slide-text'),
       useManualTextBtn: document.getElementById('use-manual-text-btn'),
 
@@ -1137,6 +1200,9 @@ Course objectives and scope...
       // Render Active View
       renderCurrentCourseWeek();
 
+      // Detect Environment (GitHub Pages static vs Server)
+      detectEnvironment();
+
       // Setup Event Listeners
       setupEventListeners();
 
@@ -1195,6 +1261,110 @@ Course objectives and scope...
         if (elements.themeIcon) elements.themeIcon.className = 'fa-solid fa-moon text-sm text-slate-600';
       }
       localStorage.setItem(THEME_STORAGE, theme);
+    }
+
+    function detectEnvironment() {
+      const host = window.location.hostname.toLowerCase();
+      const proto = window.location.protocol;
+      const isStatic = host.includes('github.io') ||
+                       host.endsWith('.pages.dev') ||
+                       host.endsWith('.netlify.app') ||
+                       host.endsWith('.vercel.app') ||
+                       host.endsWith('.surge.sh') ||
+                       proto === 'file:' ||
+                       (host === 'localhost' && window.location.port === '');
+
+      appState.isStaticHost = isStatic;
+
+      const savedKey = localStorage.getItem('gemini_api_key') || '';
+      const badgeText = document.getElementById('ai-server-badge-text');
+      const badgeIcon = document.getElementById('ai-server-badge-icon');
+      const envBadge = document.getElementById('hosting-env-badge');
+      const statusDesc = document.getElementById('engine-status-desc');
+
+      if (isStatic) {
+        if (badgeText) badgeText.textContent = savedKey ? 'Gemini Direct REST' : 'GitHub Pages Ready';
+        if (badgeIcon) badgeIcon.className = savedKey ? 'fa-solid fa-key text-[11px] text-indigo-500' : 'fa-brands fa-github text-[11px] text-emerald-600 dark:text-emerald-400';
+        if (envBadge) {
+          envBadge.innerHTML = `<i class="fa-brands fa-github mr-1"></i> GitHub Pages (Static)`;
+          envBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
+        }
+        if (statusDesc) {
+          statusDesc.textContent = savedKey ? 'Direct browser Gemini REST API active' : 'Built-in High-Yield Academic Engine (Zero API Key needed)';
+        }
+      } else {
+        // Quick probe to /api/health with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        fetch('/api/health', { signal: controller.signal })
+          .then(res => res.json())
+          .then(data => {
+            clearTimeout(timeoutId);
+            if (badgeText) badgeText.textContent = 'Server Gemini Connected';
+            if (envBadge) {
+              envBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 inline-block"></span> Full-Stack Server`;
+            }
+          })
+          .catch(() => {
+            clearTimeout(timeoutId);
+            appState.isStaticHost = true;
+            if (badgeText) badgeText.textContent = savedKey ? 'Gemini Direct REST' : 'GitHub Pages Ready';
+            if (envBadge) {
+              envBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-1 inline-block"></span> Client-Side Engine`;
+            }
+          });
+      }
+
+      updateEngineModeUI();
+    }
+
+    function setEngineMode(mode) {
+      appState.engineMode = mode;
+      updateEngineModeUI();
+    }
+
+    function updateEngineModeUI() {
+      const mode = appState.engineMode;
+      const isStatic = appState.isStaticHost;
+      const savedKey = localStorage.getItem('gemini_api_key') || '';
+
+      if (elements.engineModeBtns) {
+        elements.engineModeBtns.forEach(b => {
+          const btnMode = b.getAttribute('data-engine-mode');
+          if (btnMode === mode) {
+            b.className = 'engine-mode-btn p-2 rounded-lg border text-left text-xs transition-all border-indigo-500 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-100 font-semibold shadow-xs';
+          } else {
+            b.className = 'engine-mode-btn p-2 rounded-lg border text-left text-xs transition-all border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-300 font-normal';
+          }
+        });
+      }
+
+      if (elements.triggerBtnLabel) {
+        if (mode === 'academic') {
+          elements.triggerBtnLabel.textContent = 'Generate Exam Deck (Built-in Academic Engine)';
+        } else if (mode === 'gemini') {
+          elements.triggerBtnLabel.textContent = isStatic
+            ? (savedKey ? 'Generate Exam Deck (Gemini Direct REST)' : 'Generate Exam Deck (API Key Required on Static)')
+            : 'Generate Exam Deck (Gemini API)';
+        } else {
+          elements.triggerBtnLabel.textContent = isStatic
+            ? (savedKey ? 'Generate Exam Deck (Gemini Direct REST)' : 'Generate Exam Deck (Academic Engine)')
+            : 'Generate 40-Question Exam Deck';
+        }
+      }
+
+      const caption = document.getElementById('generate-status-caption');
+      if (caption) {
+        if (isStatic) {
+          if (savedKey && mode !== 'academic') {
+            caption.innerHTML = '<i class="fa-solid fa-key text-indigo-500 mr-1"></i> Calling Google Gemini REST API directly in browser with saved key.';
+          } else {
+            caption.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 mr-1"></i> Zero network calls on GitHub Pages: 100% offline High-Yield Academic Grounding Engine.';
+          }
+        } else {
+          caption.innerHTML = '<i class="fa-solid fa-shield-halved text-emerald-500 mr-1"></i> Content filtering: ignores administrative slides, targets core academic syllabus only.';
+        }
+      }
     }
 
     // ==========================================
@@ -2666,6 +2836,163 @@ Course objectives and scope...
       };
     }
 
+    function buildPromptClient(courseName, courseCode, weekTitle, slideText) {
+      return `Generate weekly academic exam preparation materials for the course "${courseName}" (${courseCode}), ${weekTitle}, STRICTLY from the substantive body slide text.
+
+SLIDE CONTENT:
+"""
+${slideText}
+"""
+
+CONTENT FILTERING & RELEVANCE RULES (MANDATORY):
+1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES:
+   - Disregard cover/title slides, agenda, professor/instructor biographies, grading policies, attendance rules, announcements, office hours, syllabus snapshots, and "Questions?" or "Thank You" ending slides.
+   - Do NOT generate any flashcards or test questions based on dates, speaker names, room numbers, course codes, or exam policies.
+2. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY:
+   - Focus exclusively on core conceptual material: formal definitions, frameworks, formulas, step-by-step methodologies, cause-and-effect relationships, and business/mathematical principles.
+   - If a slide contains only a stock image, decorative quote, or generic header with no factual substance, skip it entirely.
+3. STRICT GROUNDING:
+   - Every question and flashcard must test knowledge directly applicable to the academic subject matter covered in the substantive body slides.
+
+STRICT MANDATORY DELIVERABLES IN VALID JSON:
+{
+  "summary": {
+    "executive_overview": "A rigorous 2-3 paragraph academic synthesis of the core topics covered solely in these slides.",
+    "core_takeaways": [
+      "Takeaway 1 citing substantive academic principles",
+      "Takeaway 2",
+      "Takeaway 3",
+      "Takeaway 4",
+      "Takeaway 5",
+      "Takeaway 6",
+      "Takeaway 7"
+    ],
+    "key_formulas_and_frameworks": [
+      {
+        "name": "Formula or Model Name from Slides",
+        "details": "Mathematical formula, variable breakdown, or framework matrices found explicitly on slides.",
+        "slide_reference": "Slide X"
+      }
+    ],
+    "key_definitions": [
+      {
+        "term": "Term directly from slides",
+        "definition": "Strict definition given in slides.",
+        "slide_reference": "Slide X"
+      }
+    ]
+  },
+  "flashcards": [
+    {
+      "front": "Academic Term, Theoretical Concept, or Quantitative Prompt",
+      "back": "Detailed definition, formula, or explanation directly from slides",
+      "slide_reference": "Slide X"
+    }
+  ],
+  "practice_questions": [
+    {
+      "question_number": 1,
+      "type": "mcq",
+      "question": "Clear academic question testing slide concept",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": "B",
+      "explanation": "Detailed explanation citing why B is correct strictly from the substantive slide.",
+      "slide_reference": "Slide 2"
+    },
+    {
+      "question_number": 21,
+      "type": "fill_in_the_blank",
+      "sentence_with_blank": "In this domain, ________ represents the core mechanism described on the slide.",
+      "target_term": "Target Keyword",
+      "acceptable_variations": ["target keyword", "keyword"],
+      "explanation": "Rationale citing the specific slide definition.",
+      "slide_reference": "Slide 5"
+    },
+    {
+      "question_number": 31,
+      "type": "short_answer",
+      "question": "Analytical scenario or problem requiring application of slide framework.",
+      "model_answer": "Comprehensive exemplar answer showing full marks derivation.",
+      "key_grading_points": [
+        "Identified primary variable from slide",
+        "Applied core formula correctly",
+        "Explained academic trade-off"
+      ],
+      "slide_reference": "Slide 9"
+    }
+  ]
+}
+
+CRITICAL RULES:
+1. STRICTLY 40 practice questions total: Q1-20 must be MCQ, Q21-30 must be fill_in_the_blank, Q31-40 must be short_answer.
+2. Every single question and flashcard MUST have a valid "slide_reference" citing the substantive slide (e.g. "Slide 3").
+3. Completely ignore administrative slides (dates, professor names, emails, room numbers, grading policies, agendas, Q&A/Thank you).
+4. Do NOT extrapolate or introduce external facts beyond the provided slides.
+5. Output MUST be valid, parseable JSON.`;
+    }
+
+    async function callDirectGeminiRestApi(courseName, courseCode, weekTitle, slideText, apiKey) {
+      const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+      const prompt = buildPromptClient(courseName, courseCode, weekTitle, slideText);
+      let lastErr = null;
+
+      for (const model of candidateModels) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const payload = {
+            systemInstruction: {
+              parts: [{
+                text: `You are an academic examiner. Generate study materials STRICTLY and SOLELY from the provided slide text. Do not invent, extrapolate, or introduce external facts, concepts, or outside course syllabus material not explicitly written in the slides. If a concept is not in the text, omit it.
+
+CONTENT FILTERING & RELEVANCE RULES:
+1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES (cover slides, agenda, professor bios, grading policies, attendance, office hours, syllabus, Q&A/Thank you).
+2. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY (definitions, frameworks, formulas, methodologies, principles).
+3. STRICT GROUNDING: Every question and flashcard must test knowledge directly from substantive body slides.`
+              }]
+            },
+            contents: [
+              {
+                parts: [{ text: prompt }]
+              }
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json'
+            }
+          };
+
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson.error?.message || `HTTP ${res.status}`);
+          }
+
+          const resData = await res.json();
+          const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('No candidate content returned by Gemini REST API.');
+
+          let cleaned = rawText.trim();
+          if (cleaned.startsWith('```json')) cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          else if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+
+          const parsed = JSON.parse(cleaned);
+          if (!parsed.practice_questions || parsed.practice_questions.length === 0) {
+            throw new Error('Incomplete practice questions returned by Gemini REST API.');
+          }
+          return { success: true, modelUsed: model, data: parsed };
+        } catch (e) {
+          lastErr = e;
+          console.warn(`[Client-Gemini] Model ${model} failed:`, e.message || e);
+        }
+      }
+
+      throw lastErr || new Error('Direct Gemini REST call failed across candidate models.');
+    }
+
     async function generateExamDeck() {
       const slideText = appState.pendingSlideText;
       if (!slideText || slideText.trim().length < 20) {
@@ -2681,93 +3008,120 @@ Course objectives and scope...
       setGenerationStep('step-extract', 'done');
       setGenerationStep('step-ground', 'active');
 
-      try {
-        await new Promise(r => setTimeout(r, 120));
-        setGenerationStep('step-ground', 'done');
-        setGenerationStep('step-gemini', 'active');
+      await new Promise(r => setTimeout(r, 120));
+      setGenerationStep('step-ground', 'done');
+      setGenerationStep('step-gemini', 'active');
 
-        const savedApiKey = localStorage.getItem('gemini_api_key') || '';
+      const savedApiKey = localStorage.getItem('gemini_api_key') || '';
+      const mode = appState.engineMode; // 'auto', 'academic', 'gemini'
+      const isStatic = appState.isStaticHost;
 
-        // Call the server Gemini API endpoint
-        const response = await fetch('/api/generate-exam-deck', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(savedApiKey ? { 'x-gemini-api-key': savedApiKey } : {})
-          },
-          body: JSON.stringify({
-            courseName: course.name,
-            courseCode: course.code,
-            weekTitle: week.title,
-            slideText: slideText,
-            apiKeyOverride: savedApiKey
-          })
-        });
+      const stepGeminiText = document.querySelector('#step-gemini span');
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Server API responded with HTTP status ${response.status}`);
-        }
+      let parsedData = null;
+      let modelUsed = '';
 
-        const result = await response.json();
-        if (!result.success || !result.data) {
-          throw new Error(result.error || 'Server did not return valid study pack data.');
-        }
-
-        const parsedData = result.data;
-
-        setGenerationStep('step-gemini', 'done');
-        setGenerationStep('step-validate', 'active');
-
-        // Verify and complete structures
-        parsedData.slide_count = appState.pendingSlideCount || (parsedData.practice_questions && parsedData.practice_questions.length ? Math.min(20, parsedData.practice_questions.length) : 1);
-        parsedData.raw_slide_text = slideText;
-        parsedData.generated_at = Date.now();
-        parsedData.modelUsed = result.modelUsed;
-        parsedData.userAnswers = {};
-        parsedData.selfGrading = {};
-        parsedData.masteredFlashcards = {};
-
-        // Save into current week state
-        week.data = parsedData;
-        saveState();
-
-        await new Promise(r => setTimeout(r, 150));
-        setGenerationStep('step-validate', 'done');
-
-        setTimeout(() => {
-          closeGenerationModal();
-          renderSidebarCourses();
-          renderWeeksList();
-          renderCurrentCourseWeek();
-        }, 300);
-
-      } catch (err) {
-        console.error('API Generation failure', err);
-        closeGenerationModal();
-
-        const isQuota = err.message && (err.message.includes('quota') || err.message.includes('429') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('exceeded'));
-
-        if (isQuota) {
-          showErrorModalWithAction(
-            'Gemini API Quota Notice (429)',
-            `${err.message}\n\nYou can configure a billing-enabled API key, or generate the study pack immediately with the offline synthesis engine.`,
-            'Generate with Offline Engine',
-            () => {
-              fallbackOfflineGeneration(course, week, slideText);
-            }
-          );
+      // Case 1: Built-in Academic Grounding Engine explicitly requested
+      if (mode === 'academic') {
+        if (stepGeminiText) stepGeminiText.textContent = '3. Synthesizing via High-Yield Academic Engine (Instant Offline)...';
+        await new Promise(r => setTimeout(r, 100));
+        parsedData = generateOfflineAcademicPack(course.name, course.code, week.title, slideText);
+        modelUsed = 'High-Yield Academic Grounding Engine (Offline)';
+      }
+      // Case 2: Static Hosting (e.g. GitHub Pages)
+      // IMPORTANT: Do NOT make a POST to /api/generate-exam-deck because GitHub Pages disallows POST and returns HTTP 405!
+      else if (isStatic) {
+        if (savedApiKey && mode !== 'academic') {
+          if (stepGeminiText) stepGeminiText.textContent = '3. Calling Direct Gemini REST API (Client-Side)...';
+          try {
+            const clientResult = await callDirectGeminiRestApi(course.name, course.code, week.title, slideText, savedApiKey);
+            parsedData = clientResult.data;
+            modelUsed = `Gemini REST (${clientResult.modelUsed})`;
+          } catch (clientErr) {
+            console.warn('Client Gemini REST call failed, gracefully synthesizing via built-in Academic Engine:', clientErr.message);
+            if (stepGeminiText) stepGeminiText.textContent = '3. Synthesizing via High-Yield Academic Engine (Auto-Fallback)...';
+            await new Promise(r => setTimeout(r, 100));
+            parsedData = generateOfflineAcademicPack(course.name, course.code, week.title, slideText);
+            modelUsed = 'High-Yield Academic Grounding Engine (Fallback)';
+          }
         } else {
-          showErrorModalWithAction(
-            'Gemini API Error',
-            `API generation call failed: ${err.message || 'Unknown network error'}.\n\nWould you like to synthesize this study pack using the offline engine instead?`,
-            'Generate with Offline Engine',
-            () => {
-              fallbackOfflineGeneration(course, week, slideText);
-            }
-          );
+          // GitHub Pages with no custom API key: Zero network POST requests, zero 405 errors!
+          if (stepGeminiText) stepGeminiText.textContent = '3. Synthesizing via High-Yield Academic Engine (GitHub Pages Native)...';
+          await new Promise(r => setTimeout(r, 120));
+          parsedData = generateOfflineAcademicPack(course.name, course.code, week.title, slideText);
+          modelUsed = 'High-Yield Academic Grounding Engine (GitHub Pages Native)';
         }
       }
+      // Case 3: Full-Stack / Node Server Environment (AI Studio preview container)
+      else {
+        if (mode === 'gemini' && savedApiKey) {
+          if (stepGeminiText) stepGeminiText.textContent = '3. Calling Gemini REST API with custom key...';
+        } else {
+          if (stepGeminiText) stepGeminiText.textContent = '3. Server Gemini API synthesizing exam deck...';
+        }
+
+        try {
+          const response = await fetch('/api/generate-exam-deck', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(savedApiKey ? { 'x-gemini-api-key': savedApiKey } : {})
+            },
+            body: JSON.stringify({
+              courseName: course.name,
+              courseCode: course.code,
+              weekTitle: week.title,
+              slideText: slideText,
+              apiKeyOverride: savedApiKey
+            })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `Server API responded with HTTP status ${response.status}`);
+          }
+
+          const result = await response.json();
+          if (!result.success || !result.data) {
+            throw new Error(result.error || 'Server did not return valid study pack data.');
+          }
+
+          parsedData = result.data;
+          modelUsed = result.modelUsed || 'gemini-server';
+        } catch (serverErr) {
+          console.warn('Server API call encountered error, seamlessly activating High-Yield Academic Engine:', serverErr.message);
+          if (stepGeminiText) stepGeminiText.textContent = '3. Synthesizing via Academic Grounding Engine (Seamless Resilience)...';
+          await new Promise(r => setTimeout(r, 120));
+          parsedData = generateOfflineAcademicPack(course.name, course.code, week.title, slideText);
+          modelUsed = 'High-Yield Academic Grounding Engine (Resilience Fallback)';
+        }
+      }
+
+      setGenerationStep('step-gemini', 'done');
+      setGenerationStep('step-validate', 'active');
+
+      // Verify and complete structures
+      parsedData.slide_count = appState.pendingSlideCount || (parsedData.practice_questions && parsedData.practice_questions.length ? Math.min(20, parsedData.practice_questions.length) : 1);
+      parsedData.raw_slide_text = slideText;
+      parsedData.generated_at = Date.now();
+      parsedData.modelUsed = modelUsed;
+      parsedData.userAnswers = {};
+      parsedData.selfGrading = {};
+      parsedData.masteredFlashcards = {};
+
+      // Save into current week state
+      week.data = parsedData;
+      saveState();
+
+      await new Promise(r => setTimeout(r, 150));
+      setGenerationStep('step-validate', 'done');
+
+      setTimeout(() => {
+        closeGenerationModal();
+        renderSidebarCourses();
+        renderWeeksList();
+        renderCurrentCourseWeek();
+      }, 300);
     }
 
     function fallbackOfflineGeneration(course, week, slideText) {
@@ -3001,6 +3355,14 @@ Course objectives and scope...
         });
       }
 
+      if (elements.aiServerBadge && apiKeyModal) {
+        elements.aiServerBadge.addEventListener('click', () => {
+          const currentKey = localStorage.getItem('gemini_api_key') || '';
+          if (apiKeyInput) apiKeyInput.value = currentKey;
+          apiKeyModal.classList.remove('hidden');
+        });
+      }
+
       if (closeApiKeyBtn && apiKeyModal) {
         closeApiKeyBtn.addEventListener('click', () => {
           apiKeyModal.classList.add('hidden');
@@ -3016,7 +3378,8 @@ Course objectives and scope...
             localStorage.removeItem('gemini_api_key');
           }
           apiKeyModal.classList.add('hidden');
-          showErrorModal('API Key Configured', val ? 'Custom Gemini API Key saved to browser localStorage and will be sent with generation requests.' : 'Custom key cleared. The application will use the server-injected Gemini API key.');
+          detectEnvironment();
+          showErrorModal('API Key Configured', val ? 'Personal Gemini API Key saved. On GitHub Pages, calls will be made directly to Google Gemini REST API.' : 'Key cleared. The app will use the Built-in Academic Engine or Server Key.');
         });
       }
 
@@ -3025,7 +3388,19 @@ Course objectives and scope...
           localStorage.removeItem('gemini_api_key');
           apiKeyInput.value = '';
           apiKeyModal.classList.add('hidden');
-          showErrorModal('API Key Cleared', 'Custom key cleared. The application will use the server-injected Gemini API key.');
+          detectEnvironment();
+          showErrorModal('API Key Cleared', 'Custom key cleared. The app will use the Built-in Academic Engine on GitHub Pages.');
+        });
+      }
+
+      if (elements.engineModeBtns) {
+        elements.engineModeBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-engine-mode');
+            if (mode) {
+              setEngineMode(mode);
+            }
+          });
         });
       }
 
