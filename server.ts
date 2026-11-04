@@ -41,19 +41,21 @@ function getGenAIClient(customApiKey?: string): GoogleGenAI {
 }
 
 const SYSTEM_INSTRUCTION =
-  `You are an academic examiner. Generate study materials STRICTLY and SOLELY from the provided slide text. Do not invent, extrapolate, or introduce external facts, concepts, or outside course syllabus material not explicitly written in the slides. If a concept is not in the text, omit it.
+  `You are an academic examiner. Generate study materials STRICTLY and SOLELY from the provided substantive slide text. Do not invent, extrapolate, or introduce external facts, concepts, or outside course syllabus material not explicitly written in the slides. If a concept is not in the text, omit it.
 
 CONTENT FILTERING & RELEVANCE RULES:
 1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES:
    - Completely disregard cover/title slides, agenda slides, professor/instructor biographies, grading policies, attendance rules, course announcements, office hours, syllabus snapshots, and "Questions?" or "Thank You" ending slides.
-   - Do NOT generate any flashcards or test questions based on dates, speaker names, room numbers, course codes, or exam policies.
+   - NEVER generate any flashcards or test questions based on dates, speaker names, instructor titles (e.g. "Prof", "Dr", "Valerie Wulfhorst"), room numbers, course codes, or exam policies.
 
 2. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY:
    - Focus exclusively on core conceptual material: formal definitions, frameworks, formulas, step-by-step methodologies, cause-and-effect relationships, and business/mathematical principles.
    - If a slide contains only a stock image, decorative quote, or generic header with no factual substance, skip it entirely.
 
-3. STRICT GROUNDING:
-   - Every question and flashcard must test knowledge directly applicable to the academic subject matter covered in the substantive body slides.`;
+3. STRICT EXAM-STYLE QUESTION FORMULATION:
+   - Formulate all questions in formal, professional university examination style testing real syllabus concepts.
+   - NEVER write naive stems like 'According to Slide X ("..."), which of the following statements characterizes "Prof"?' or put raw slide headers in quotes inside questions.
+   - Citations belong exclusively in the "slide_reference" metadata field (e.g. "Slide 2").`;
 
 // Candidate models in priority order.
 // 'gemini-3.1-flash-lite' has higher free tier quotas, followed by 'gemini-flash-latest' and 'gemini-3.8-flash'.
@@ -62,6 +64,58 @@ const CANDIDATE_MODELS = [
   'gemini-flash-latest',
   'gemini-3.8-flash',
 ];
+
+// Helper to scrub template headers, running footers, and instructor boilerplate from slides
+// Helper to scrub template headers, running footers, and instructor boilerplate from slides
+function sanitizeLectureSlideText(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  const lines = raw.split('\n');
+  const cleanedLines: string[] = [];
+
+  for (let line of lines) {
+    let t = line.trim();
+    if (!t) continue;
+
+    // 1. Remove professor and instructor titles and names (e.g. Prof. Dr. Valerie Wulfhorst)
+    t = t.replace(/\b(?:prof\.?\s*dr\.?|professor|dr\.|lecturer|instructor|ta)\s+[a-z\.\-'\u00C0-\u024F]+(?:\s+[a-z\.\-'\u00C0-\u024F]+){0,3}\b/gi, ' ');
+    t = t.replace(/\b(?:prof\.?\s*dr\.?|professor|dr\.|valerie\s*wulfhorst|wulfhorst)\b/gi, ' ');
+
+    // 2. Remove departmental boilerplate and controlling specialization tags
+    t = t.replace(/\b(?:business administration|administration)\s*[\u2013\u2014\-–—]\s*(?:focus on controlling|controlling)\b/gi, ' ');
+    t = t.replace(/\b(?:business administration|focus on controlling)\b/gi, ' ');
+    t = t.replace(/\b(?:administration\s*[\u2013\u2014\-–—]?)\b/gi, ' ');
+    t = t.replace(/\b(?:department of [a-z\s]+|faculty of [a-z\s]+)\b/gi, ' ');
+
+    // 3. Remove repetitive course banner headers from slide templates
+    t = t.replace(/\b(?:business\s*[\u2013\u2014\-–—]\s*to\s*[\u2013\u2014\-–—]\s*consumer marketing|b2c marketing|corporate finance|macroeconomics|enterprise and resource planning|business mathematics|entrepreneurship)\b/gi, ' ');
+
+    // 4. Remove chapter, semester, and template slide index counters (e.g. "Ch1 I WS2026/27", "I 2 I", "I 6 I")
+    t = t.replace(/\bCh(?:apter)?\s*\d+\s*(?:[|]|\bI\b)\s*(?:WS|SS)\s*20\d{2}(?:\/\d{2,4})?\b/gi, ' ');
+    t = t.replace(/\bCh(?:apter)?\s*\d+\b/gi, ' ');
+    t = t.replace(/\b(?:WS|SS)\s*20\d{2}(?:\/\d{2,4})?\b/gi, ' ');
+
+    // 5. Template slide counters with pipes like "I 2 I", "I 6 I", "| 2 |"
+    t = t.replace(/(?:^|\s)(?:[|]|\bI\b)\s*\d+\s*(?:[|]|\bI\b)(?:\s|$)/g, ' ');
+
+    // 6. Standalone pipe delimiters (symbol | or standalone capital letter I used as pipe)
+    t = t.replace(/(?:^|\s)(?:[|]|\bI\b)(?:\s|$)/g, ' ');
+
+    // 7. Strip isolated template numbers at the beginning or preceding section numbers
+    t = t.replace(/(?:^|\s)\d+\s+(?=[A-Za-z])/g, ' ');
+    t = t.replace(/^\d+\s*(?=\d+\.|\b[A-Za-z])/g, '');
+
+    // 8. Clean up multiple spaces
+    t = t.replace(/\s{2,}/g, ' ').trim();
+
+    if (!t || t.length < 3) continue;
+    if (/^(?:agenda|table of contents|overview of today|outline)\s*$/i.test(t)) continue;
+    if (/\b(?:office hours?|room\s*\d+|zoom\.us|contact info)\b/i.test(t)) continue;
+
+    cleanedLines.push(t);
+  }
+
+  return cleanedLines.join('\n');
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -74,7 +128,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // Helper to construct structured prompt
-function buildPrompt(courseName: string, courseCode: string, weekTitle: string, slideText: string): string {
+function buildPrompt(courseName: string, courseCode: string, weekTitle: string, rawSlideText: string): string {
+  const slideText = sanitizeLectureSlideText(rawSlideText);
   return `Generate weekly academic exam preparation materials for the course "${courseName}" (${courseCode}), ${weekTitle}, STRICTLY from the substantive body slide text.
 
 SLIDE CONTENT:
@@ -85,12 +140,14 @@ ${slideText}
 CONTENT FILTERING & RELEVANCE RULES (MANDATORY):
 1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES:
    - Disregard cover/title slides, agenda, professor/instructor biographies, grading policies, attendance rules, announcements, office hours, syllabus snapshots, and "Questions?" or "Thank You" ending slides.
-   - Do NOT generate any flashcards or test questions based on dates, speaker names, room numbers, course codes, or exam policies.
+   - NEVER generate any flashcards or test questions based on dates, speaker names, academic titles ("Prof", "Dr"), room numbers, course codes, or exam policies.
 2. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY:
    - Focus exclusively on core conceptual material: formal definitions, frameworks, formulas, step-by-step methodologies, cause-and-effect relationships, and business/mathematical principles.
    - If a slide contains only a stock image, decorative quote, or generic header with no factual substance, skip it entirely.
-3. STRICT GROUNDING:
-   - Every question and flashcard must test knowledge directly applicable to the academic subject matter covered in the substantive body slides.
+3. RIGOROUS EXAM QUESTION FORMATTING:
+   - Write questions in formal university examination style.
+   - NEVER include raw slide titles, headers, or professor names inside the question stem text.
+   - Example MCQ: "Which of the following best characterizes the primary objective of the Marketing Mix in consumer markets?"
 
 STRICT MANDATORY DELIVERABLES IN VALID JSON:
 {
@@ -133,7 +190,7 @@ STRICT MANDATORY DELIVERABLES IN VALID JSON:
     {
       "question_number": 1,
       "type": "mcq",
-      "question": "Clear academic question testing slide concept",
+      "question": "Clear academic question testing slide concept without professor or raw header text",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correct_answer": "B",
       "explanation": "Detailed explanation citing why B is correct strictly from the substantive slide.",
@@ -168,7 +225,7 @@ STRICT MANDATORY DELIVERABLES IN VALID JSON:
 CRITICAL RULES:
 1. STRICTLY 40 practice questions total: Q1-20 must be MCQ, Q21-30 must be fill_in_the_blank, Q31-40 must be short_answer.
 2. Every single question and flashcard MUST have a valid "slide_reference" citing the substantive slide (e.g. "Slide 3").
-3. Completely ignore administrative slides (dates, professor names, emails, room numbers, grading policies, agendas, Q&A/Thank you).
+3. Completely ignore administrative slides and repetitive headers (dates, professor names, emails, room numbers, grading policies, agendas, Q&A/Thank you).
 4. Do NOT extrapolate or introduce external facts beyond the provided slides.
 5. Output MUST be valid, parseable JSON.`;
 }

@@ -2391,10 +2391,69 @@ Course objectives and scope...
     }
 
     // ==========================================
+    // LECTURE SLIDE SANITIZER & TEMPLATE SCRUBBER
+    // ==========================================
+    function sanitizeLectureSlideText(raw) {
+      if (!raw || typeof raw !== 'string') return '';
+      const lines = raw.split('\n');
+      const cleanedLines = [];
+
+      for (let line of lines) {
+        let t = line.trim();
+        if (!t) continue;
+
+        // 1. Remove professor and instructor titles and names (e.g. Prof. Dr. Valerie Wulfhorst)
+        t = t.replace(/\b(?:prof\.?\s*dr\.?|professor|dr\.|lecturer|instructor|ta)\s+[a-z\.\-'\u00C0-\u024F]+(?:\s+[a-z\.\-'\u00C0-\u024F]+){0,3}\b/gi, ' ');
+        t = t.replace(/\b(?:prof\.?\s*dr\.?|professor|dr\.|valerie\s*wulfhorst|wulfhorst)\b/gi, ' ');
+
+        // 2. Remove departmental boilerplate and controlling specialization tags
+        t = t.replace(/\b(?:business administration|administration)\s*[\u2013\u2014\-–—]\s*(?:focus on controlling|controlling)\b/gi, ' ');
+        t = t.replace(/\b(?:business administration|focus on controlling)\b/gi, ' ');
+        t = t.replace(/\b(?:administration\s*[\u2013\u2014\-–—]?)\b/gi, ' ');
+        t = t.replace(/\b(?:department of [a-z\s]+|faculty of [a-z\s]+)\b/gi, ' ');
+
+        // 3. Remove repetitive course banner headers from slide templates
+        t = t.replace(/\b(?:business\s*[\u2013\u2014\-–—]\s*to\s*[\u2013\u2014\-–—]\s*consumer marketing|b2c marketing|corporate finance|macroeconomics|enterprise and resource planning|business mathematics|entrepreneurship)\b/gi, ' ');
+
+        // 4. Remove chapter, semester, and template slide index counters (e.g. "Ch1 I WS2026/27", "I 2 I", "I 6 I")
+        t = t.replace(/\bCh(?:apter)?\s*\d+\s*(?:[|]|\bI\b)\s*(?:WS|SS)\s*20\d{2}(?:\/\d{2,4})?\b/gi, ' ');
+        t = t.replace(/\bCh(?:apter)?\s*\d+\b/gi, ' ');
+        t = t.replace(/\b(?:WS|SS)\s*20\d{2}(?:\/\d{2,4})?\b/gi, ' ');
+
+        // 5. Template slide counters with pipes like "I 2 I", "I 6 I", "| 2 |"
+        t = t.replace(/(?:^|\s)(?:[|]|\bI\b)\s*\d+\s*(?:[|]|\bI\b)(?:\s|$)/g, ' ');
+
+        // 6. Standalone pipe delimiters (symbol | or standalone capital letter I used as pipe)
+        t = t.replace(/(?:^|\s)(?:[|]|\bI\b)(?:\s|$)/g, ' ');
+
+        // 7. Strip isolated template numbers at the beginning or preceding section numbers
+        t = t.replace(/(?:^|\s)\d+\s+(?=[A-Za-z])/g, ' ');
+        t = t.replace(/^\d+\s*(?=\d+\.|\b[A-Za-z])/g, '');
+
+        // 8. Clean up multiple spaces
+        t = t.replace(/\s{2,}/g, ' ').trim();
+
+        if (!t || t.length < 3) continue;
+
+        // 9. Filter standalone noise lines
+        if (isAdministrativeNoiseLine(t)) continue;
+
+        cleanedLines.push(t);
+      }
+
+      return cleanedLines.join('\n');
+    }
+
+    // ==========================================
     // CONTENT FILTERING & RELEVANCE RULES (ACADEMIC ENGINE)
     // ==========================================
     function cleanAcademicString(s) {
-      return (s || '').replace(/^[#\*\-•\d\.\s]+/, '').replace(/[\*\_]+/g, '').trim();
+      return (s || '')
+        .replace(/^[#\*\-•\d\.\s]+/, '')
+        .replace(/[\*\_]+/g, '')
+        .replace(/(?:prof\.?\s*dr\.?|professor|dr\.)\s+[a-z\.\s-]+/gi, '')
+        .replace(/\b(?:focus on controlling|ws2026\/?27|ch\d+)\b/gi, '')
+        .trim();
     }
 
     // Rule 1: Administrative noise detector for lines and phrases
@@ -2419,7 +2478,7 @@ Course objectives and scope...
 
       // Speaker / Instructor names and bios when standalone
       if (/^(?:prof\.|professor|dr\.|instructor|lecturer|ta|teaching assistant)\s+[a-z\s\.-]+$/i.test(cleaned)) return true;
-      if (/\b(?:phd from|joined the faculty|my office is|feel free to email|bio:|about me)\b/i.test(cleaned)) return true;
+      if (/\b(?:valerie wulfhorst|phd from|joined the faculty|my office is|feel free to email|bio:|about me)\b/i.test(cleaned)) return true;
 
       // Course announcements and housekeeping
       if (/^(?:announcements?|housekeeping|reminders|administrative matters|course logistics|agenda|outline|table of contents|overview of today)\b/i.test(cleaned)) return true;
@@ -2435,6 +2494,13 @@ Course objectives and scope...
       const normTitle = (title || '').trim().toLowerCase();
       const cleanText = (text || '').toLowerCase();
 
+      // Agenda / Outline detection in title OR slide body (e.g. Slide 2 with course syllabus table of contents)
+      if (/\b(?:agenda|table of contents|course outline|overview of today|schedule|weekly schedule|today's agenda)\b/i.test(normTitle) ||
+          /\b(?:agenda|table of contents|course outline)\b/i.test(cleanText) ||
+          (/\b(?:1\.\s+.*2\.\s+.*3\.\s+.*)\b/.test(cleanText) && /\bagenda\b/i.test(cleanText))) {
+        return { isAdmin: true, reason: 'Agenda / Course outline slide' };
+      }
+
       // Title pattern matching administrative / introductory / ending topics
       const adminTitleRegex = /^(?:agenda|outline|table of contents|contents|overview of today|schedule|weekly schedule|today's agenda|syllabus|grading|grading policy|grade breakdown|assessment|evaluation|course evaluation|attendance|attendance policy|honor code|academic integrity|announcements?|housekeeping|reminders|administrative matters|course logistics|instructor|instructor info|instructor biography|professor|lecturer|teaching assistant|ta info|about me|bio|biography|meet your professor|meet your instructor|contact info|contact details|office hours|zoom link|welcome|welcome to|course overview|intro to course|course introduction|questions\?|any questions\?|q\s*&\s*a|thank you|thanks!|thank you!|thanks for listening|end of lecture|the end|have a great weekend|see you next week|references|sources|credits|readings?)$/i;
 
@@ -2444,10 +2510,10 @@ Course objectives and scope...
 
       // Title/Cover slide heuristic (Slide 1 or 2 when slide deck has > 2 slides)
       if (slideNum <= 2 && totalSlides > 2) {
-        const hasInstructorOrDept = /\b(?:prof\.|professor|dr\.|phd|instructor|lecturer|department of|faculty of|university|college|fall\s*202\d|spring\s*202\d|summer\s*202\d|winter\s*202\d|semester|course code)\b/i.test(cleanText);
+        const hasInstructorOrDept = /\b(?:prof\.|professor|dr\.|phd|instructor|lecturer|department of|faculty of|university|college|fall\s*202\d|spring\s*202\d|summer\s*202\d|winter\s*202\d|semester|course code|wulfhorst)\b/i.test(cleanText);
         const hasLogisticsOrEmail = /[\w\.-]+@[\w\.-]+\.\w+/.test(cleanText) || /\b(?:office hours|room\s*\d+|syllabus|welcome)\b/i.test(cleanText);
         const wordCount = (cleanText.match(/\b\w+\b/g) || []).length;
-        if (wordCount < 75 && (hasInstructorOrDept || hasLogisticsOrEmail)) {
+        if (wordCount < 85 && (hasInstructorOrDept || hasLogisticsOrEmail)) {
           return { isAdmin: true, reason: 'Cover / Title or Introductory slide' };
         }
       }
@@ -2473,9 +2539,9 @@ Course objectives and scope...
         return { isAdmin: true, reason: 'Instructor contact / office hours slide' };
       }
 
-      // Pure stock image / decorative quote / empty header slide (< 12 substantive words)
+      // Pure stock image / decorative quote / empty header slide (< 10 substantive words)
       const words = (cleanText.match(/\b[a-z]{3,}\b/g) || []);
-      if (words.length < 12 && !/[:=%\+\*\/]/.test(text)) {
+      if (words.length < 10 && !/[:=%\+\*\/]/.test(text)) {
         return { isAdmin: true, reason: 'Decorative or non-substantive slide' };
       }
 
@@ -2483,27 +2549,26 @@ Course objectives and scope...
     }
 
     // Rule 2: High-yield academic substance validator
+    const BANNED_ACADEMIC_TERMS = new Set([
+      'prof', 'prof.', 'professor', 'dr', 'dr.', 'valerie', 'wulfhorst',
+      'controlling', 'agenda', 'outline', 'syllabus', 'grading', 'attendance',
+      'office hours', 'ch1', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8', 'ch9', 'ch10',
+      'ws2026', 'ws2026/27', 'ws2025/26', 'ws2024/25', 'ss2026', 'ss2025',
+      'lecture', 'slide', 'slides', 'course', 'chapter', 'university', 'faculty',
+      'welcome', 'thank you', 'thanks', 'questions', 'overview', 'focus',
+      'business administration'
+    ]);
+
     function isHighYieldAcademicConcept(term, text) {
       if (!term || typeof term !== 'string') return false;
       const cleanTerm = term.trim().toLowerCase();
       if (cleanTerm.length < 3 || cleanTerm.length > 55) return false;
 
-      // Discard administrative words
-      const adminKeywords = [
-        'agenda', 'outline', 'syllabus', 'grading', 'attendance', 'office hours', 
-        'professor', 'instructor', 'lecturer', 'ta', 'exam date', 'midterm', 'final exam', 
-        'quiz', 'assignment', 'homework', 'canvas', 'zoom', 'room', 'monday', 'tuesday', 
-        'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 
-        'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 
-        'november', 'december', 'spring', 'fall', 'summer', 'winter', 'thank you', 
-        'questions', 'welcome', 'credits', 'prerequisite', 'schedule', 'announcement', 
-        'housekeeping', 'course code', 'course overview', 'reading list'
-      ];
-
-      for (const ak of adminKeywords) {
-        if (cleanTerm === ak || cleanTerm.startsWith(ak + ' ') || cleanTerm.endsWith(' ' + ak)) {
-          return false;
-        }
+      // Check banned terms exact and token match
+      if (BANNED_ACADEMIC_TERMS.has(cleanTerm)) return false;
+      const tokens = cleanTerm.split(/\s+/);
+      for (const tok of tokens) {
+        if (BANNED_ACADEMIC_TERMS.has(tok)) return false;
       }
 
       // Discard numbers or date patterns
@@ -2513,21 +2578,308 @@ Course objectives and scope...
       return true;
     }
 
+    // Curated academic taxonomies for rigorous university exam question generation
+    const COURSE_EXAM_TAXONOMY = {
+      b2c_marketing: [
+        {
+          concept: "Marketing Mix (4Ps Framework)",
+          definition: "The tactical coordination of Product, Price, Sales/Place, and Communication to fulfill target consumer needs and deliver competitive market value.",
+          mcqStem: "Which of the following best characterizes the primary objective of the Marketing Mix in consumer markets?",
+          correctAnswer: "Coordinating Product, Price, Sales (Distribution), and Communication into an integrated offering that fulfills consumer needs.",
+          distractors: [
+            "Maximizing short-term manufacturing output regardless of customer demand elasticity.",
+            "Eliminating communication expenses by relying exclusively on wholesale distribution channels.",
+            "Restricting promotional efforts to administrative compliance and legal filings."
+          ],
+          rapidBlank: "In consumer marketing, the tactical coordination of Product, Price, Sales (Place), and Communication designed to satisfy customer needs is the ________.",
+          rapidAnswer: "Marketing Mix",
+          analyticalPrompt: "Analyze the strategic role of the Marketing Mix in consumer markets. Explain how situational analysis directly informs the formulation and tactical alignment of the 4Ps.",
+          modelAnswer: "The Marketing Mix (Product, Price, Place, Promotion) represents the tactical execution of marketing strategy. A rigorous analysis requires establishing the initial strategic situation (market demand, competitive forces, consumer needs), selecting targeted customer segments, and aligning product attributes, pricing elasticity, omnichannel sales channels, and integrated communications to create sustainable perceived value.",
+          gradingRubric: [
+            "Identifies the four tactical pillars (Product, Price, Sales/Place, Communication)",
+            "Explains the alignment with initial strategic situation analysis",
+            "Evaluates consumer perceived value and sustainable positioning"
+          ]
+        },
+        {
+          concept: "Analysis of the Initial Strategic Situation",
+          definition: "The systematic diagnostic phase dedicated to assessing external market opportunities, competitive threats, and internal organizational capabilities prior to strategy formulation.",
+          mcqStem: "When conducting an analysis of the initial strategic situation, what is the primary analytical outcome required for marketing strategy?",
+          correctAnswer: "Diagnosing external market dynamics and internal competencies to identify strategic gaps and competitive positioning opportunities.",
+          distractors: [
+            "Establishing fixed retail shelf prices before conducting consumer segmentation.",
+            "Outsourcing corporate controlling and financial forecasting to external suppliers.",
+            "Replacing empirical market data with subjective intuition without validation."
+          ],
+          rapidBlank: "The foundational phase evaluating macro-environmental factors and organizational strengths prior to marketing strategy formulation is the ________.",
+          rapidAnswer: "Initial Strategic Situation Analysis",
+          analyticalPrompt: "Evaluate the critical methodologies used to analyze the initial strategic situation. How does this diagnostic phase prevent strategic misalignment in product rollouts?",
+          modelAnswer: "Initial situation analysis employs diagnostic frameworks (e.g., SWOT, PESTEL, and 5 Forces) to evaluate macroeconomic trends, consumer behavior shifts, and internal operational strengths. By verifying market demand and competitive intensity before committing capital to product development or promotion, firms prevent mispricing, overproduction, and misdirected communications.",
+          gradingRubric: [
+            "Applies situational diagnostic frameworks (SWOT, PESTEL, Porter's Forces)",
+            "Connects market findings directly to strategic formulation decisions",
+            "Details risk mitigation against capital misallocation"
+          ]
+        },
+        {
+          concept: "Marketing Strategy Formulation & Selection",
+          definition: "The strategic process of defining market objectives, selecting target segments, and determining sustainable competitive positioning paths.",
+          mcqStem: "Under formal marketing strategy formulation, how should executive decision-makers select between competing strategic options?",
+          correctAnswer: "By evaluating each strategic option against company core competencies, target market attractiveness, and sustainable differentiation potential.",
+          distractors: [
+            "By selecting the strategy that requires the lowest level of customer interaction.",
+            "By choosing the option that minimizes all future product quality testing.",
+            "By adopting competitor strategies verbatim without assessing organizational fit."
+          ],
+          rapidBlank: "The systematic decision-making phase where marketing objectives are translated into actionable positioning choices across target segments is ________.",
+          rapidAnswer: "Marketing Strategy Formulation",
+          analyticalPrompt: "Detail the criteria used to evaluate and select marketing strategies in competitive consumer markets.",
+          modelAnswer: "Evaluating marketing strategies requires assessing feasibility, market attractiveness, competitive defensibility, and return on investment. Firms must verify whether a cost-leadership, differentiation, or niche focus best leverages organizational strengths to meet unmet customer demand.",
+          gradingRubric: [
+            "Details differentiation vs. cost-leadership strategic criteria",
+            "Evaluates resource allocation and core competencies",
+            "Outlines metrics for post-selection performance verification"
+          ]
+        },
+        {
+          concept: "Customer Relationship Management (CRM)",
+          definition: "The comprehensive strategy and operational methodology aimed at identifying, acquiring, retaining, and developing profitable consumer relationships over the complete customer lifecycle.",
+          mcqStem: "Which statement accurately distinguishes Customer Relationship Management (CRM) from purely transactional marketing?",
+          correctAnswer: "CRM focuses on maximizing long-term customer lifetime value and retention rather than single isolated purchase transactions.",
+          distractors: [
+            "CRM prioritizes one-off sales volume over customer loyalty and satisfaction metrics.",
+            "CRM eliminates the need for product warranty service and customer feedback loops.",
+            "CRM is exclusively a software database tool with no impact on marketing strategy."
+          ],
+          rapidBlank: "The managerial discipline focused on optimizing customer satisfaction, loyalty, and lifetime value across the entire lifecycle is ________.",
+          rapidAnswer: "Customer Relationship Management",
+          analyticalPrompt: "Examine how CRM systems leverage consumer data to enhance customer lifetime value (CLV) and drive marketing mix personalization.",
+          modelAnswer: "CRM captures behavioral purchase data, communication responses, and service histories to segment consumers by lifetime value. This enables firms to tailor marketing communications, offer personalized pricing or loyalty incentives, and reduce churn through proactive customer care.",
+          gradingRubric: [
+            "Defines Customer Lifetime Value (CLV) and churn reduction",
+            "Explains data-driven personalization across marketing touchpoints",
+            "Evaluates the trade-off between acquisition and retention costs"
+          ]
+        },
+        {
+          concept: "Price Elasticity & Pricing Strategy",
+          definition: "The measure of consumer responsiveness in purchase quantity to changes in price, determining optimal pricing corridors and revenue maximization.",
+          mcqStem: "When consumer demand is determined to be highly price-elastic, what strategic pricing decision maximizes total revenue?",
+          correctAnswer: "Setting prices competitively or applying moderate discounts, because quantity demanded will increase proportionally more than the percentage price decrease.",
+          distractors: [
+            "Aggressively raising prices, since consumers will continue purchasing regardless of cost.",
+            "Abandoning pricing controls and allowing retailers to set arbitrary markup percentages.",
+            "Fixing prices equal to marginal production cost with zero gross margin."
+          ],
+          rapidBlank: "The economic metric reflecting the sensitivity of consumer demand to a percentage change in product price is ________.",
+          rapidAnswer: "Price Elasticity of Demand",
+          analyticalPrompt: "Demonstrate how price elasticity calculations govern pricing corridor decisions across distinct consumer market segments.",
+          modelAnswer: "Price elasticity (% change in quantity demanded / % change in price) defines whether demand is elastic (|E| > 1) or inelastic (|E| < 1). In elastic segments, price increases destroy revenue; firms should optimize efficiency or build brand differentiation to reduce price sensitivity. In inelastic segments, value-based premium pricing captures consumer surplus without significant volume loss.",
+          gradingRubric: [
+            "Formulates the mathematical definition of price elasticity",
+            "Contrasts elastic (|E| > 1) and inelastic (|E| < 1) market implications",
+            "Connects price positioning to value-based vs. cost-plus models"
+          ]
+        },
+        {
+          concept: "Market Segmentation, Targeting & Positioning (STP)",
+          definition: "The core analytical framework partitioning a heterogeneous market into homogeneous buyer segments, choosing target groups, and establishing a distinctive brand image.",
+          mcqStem: "In the STP framework, what is the primary objective of the positioning phase?",
+          correctAnswer: "Occupying a clear, distinctive, and desirable place relative to competing products in the mind of the target consumer.",
+          distractors: [
+            "Locating physical warehouse facilities in geographic centers of distribution.",
+            "Assigning internal job roles and administrative duties among marketing personnel.",
+            "Maximizing total market share by selling an identical generic product to all consumers."
+          ],
+          rapidBlank: "The process of carving out a distinctive mental image and compelling value proposition for a brand relative to competitors is ________.",
+          rapidAnswer: "Positioning",
+          analyticalPrompt: "Evaluate the sequential STP process (Segmentation, Targeting, Positioning). Why must positioning directly reflect empirical segmentation criteria?",
+          modelAnswer: "Segmentation divides consumers into identifiable groups based on demographic, psychographic, and behavioral criteria. Targeting evaluates segment profitability and strategic fit. Positioning then designs the marketing mix to communicate a tailored value proposition addressing those specific target needs, ensuring the brand stands apart from substitutes.",
+          gradingRubric: [
+            "Details the logical sequence: Segmentation -> Targeting -> Positioning",
+            "Identifies behavioral and psychographic segmentation variables",
+            "Explains perceptual mapping and competitive differentiation"
+          ]
+        },
+        {
+          concept: "Integrated Marketing Communications (IMC)",
+          definition: "The strategic coordination and synergy of all advertising, public relations, direct marketing, and digital channels to convey a coherent brand message.",
+          mcqStem: "What is the primary operational advantage of implementing Integrated Marketing Communications (IMC)?",
+          correctAnswer: "Delivering a consistent, unified brand message across all consumer touchpoints to reinforce brand equity and eliminate customer confusion.",
+          distractors: [
+            "Running contradictory campaigns simultaneously on different channels to test consumer intuition.",
+            "Eliminating all digital media channels in favor of traditional print advertising exclusively.",
+            "Allowing each retail channel partner to invent independent advertising messages."
+          ],
+          rapidBlank: "The strategic synchronization of all promotional instruments to deliver a singular, cohesive message across all consumer touchpoints is ________.",
+          rapidAnswer: "Integrated Marketing Communications",
+          analyticalPrompt: "Analyze the challenges of executing IMC across omnichannel digital and physical retail touchpoints.",
+          modelAnswer: "IMC requires aligning creative assets, tone of voice, and timing across social media, broadcast, retail displays, and direct marketing. The challenge lies in cross-functional coordination, attribution tracking across touchpoints, and preserving message consistency while optimizing each channel's specific technical format.",
+          gradingRubric: [
+            "Explains omnichannel message consistency and brand equity impact",
+            "Identifies cross-channel attribution and organizational silos",
+            "Synthesizes measurable KPIs for promotional synergy"
+          ]
+        },
+        {
+          concept: "Product Strategy & Value Proposition",
+          definition: "The deliberate design of core features, augmented services, packaging, and branding that collectively satisfy target consumer functional and emotional requirements.",
+          mcqStem: "In product strategy, which layer of the product offering delivers the fundamental problem-solving benefit sought by the consumer?",
+          correctAnswer: "The core product (or core benefit), which addresses the fundamental need the consumer is purchasing to satisfy.",
+          distractors: [
+            "The packaging label and warranty card exclusively.",
+            "The corporate legal registration code and patent filing number.",
+            "The external third-party shipping container."
+          ],
+          rapidBlank: "The fundamental problem-solving service or core benefit that a consumer is truly buying is the ________.",
+          rapidAnswer: "Core Product Benefit",
+          analyticalPrompt: "Examine Levitt's multi-level product model (Core, Actual, Augmented Product). How do firms leverage the augmented product layer to sustain competitive advantage?",
+          modelAnswer: "While competitors quickly imitate the actual product features, sustainable differentiation is achieved at the augmented layer (e.g., exceptional customer service, digital ecosystem integration, warranties, and post-purchase onboarding). This builds brand loyalty and creates customer switching costs.",
+          gradingRubric: [
+            "Distinguishes core benefit, actual product, and augmented product",
+            "Explains how augmented services create switching costs",
+            "Connects product layer differentiation to margin protection"
+          ]
+        }
+      ],
+      corporate_finance: [
+        {
+          concept: "Weighted Average Cost of Capital (WACC)",
+          definition: "The blended discount rate representing the minimum required return across a firm's debt and equity capital structures.",
+          mcqStem: "How does an increase in a firm's corporate tax rate affect its after-tax cost of debt in WACC calculations?",
+          correctAnswer: "It decreases the after-tax cost of debt due to the larger interest tax shield: Kd * (1 - T).",
+          distractors: [
+            "It increases the after-tax cost of debt proportionally to the tax increase.",
+            "It leaves the cost of debt unchanged because debt yields are fixed in financial markets.",
+            "It forces equity beta to drop to zero."
+          ],
+          rapidBlank: "The composite discount rate reflecting the proportional required return on both debt and equity financing is ________.",
+          rapidAnswer: "Weighted Average Cost of Capital",
+          analyticalPrompt: "Derive the WACC formula and explain how capital structure optimization balances financial distress costs against the debt tax shield.",
+          modelAnswer: "WACC = (E/V)*Ke + (D/V)*Kd*(1-T). According to Trade-Off Theory, adding debt creates an interest tax shield, lowering WACC. However, excessive leverage escalates financial distress costs and agency risks, raising both Kd and Ke, creating an optimal capital structure where WACC is minimized.",
+          gradingRubric: [
+            "States the mathematical WACC formula with tax adjustment",
+            "Applies the Trade-off Theory of capital structure",
+            "Identifies the minimum WACC inflection point"
+          ]
+        }
+      ],
+      entrepreneurship: [
+        {
+          concept: "Lean Startup Methodology & Customer Discovery",
+          definition: "An iterative framework for developing businesses and products based on validated learning, hypothesis testing, and rapid experimentation.",
+          mcqStem: "In the Lean Startup methodology, what is the core purpose of a Minimum Viable Product (MVP)?",
+          correctAnswer: "To begin the process of validated learning as quickly as possible with the minimum amount of effort and development expense.",
+          distractors: [
+            "To launch a fully finalized commercial product with zero anticipated software updates.",
+            "To generate maximum short-term profits during the first week of company founding.",
+            "To replace all human employees with automated marketing bots."
+          ],
+          rapidBlank: "The version of a new product that enables a team to collect the maximum amount of validated learning about customers with the least effort is the ________.",
+          rapidAnswer: "Minimum Viable Product",
+          analyticalPrompt: "Analyze the Build-Measure-Learn feedback loop. How do early-stage ventures determine when to pivot versus persevere?",
+          modelAnswer: "The Build-Measure-Learn loop tests leap-of-faith assumptions. If iterative experiments indicate that customer acquisition, retention, or monetization metrics fail to validate the core value hypothesis, founders execute a structured pivot (e.g., zoom-in, customer segment, or engine of growth pivot) rather than burning cash on a flawed model.",
+          gradingRubric: [
+            "Details the Build-Measure-Learn feedback cycle",
+            "Explains quantitative criteria for pivot vs. persevere decisions",
+            "Identifies common pivot typologies (value prop, customer segment)"
+          ]
+        }
+      ],
+      business_math: [
+        {
+          concept: "Linear Programming & Simplex Optimization",
+          definition: "A mathematical modeling technique to maximize or minimize a linear objective function subject to a set of linear inequality constraints.",
+          mcqStem: "In a linear programming problem, where does an optimal solution always occur if a bounded feasible region exists?",
+          correctAnswer: "At one of the extreme points (corner vertices) of the convex feasible region.",
+          distractors: [
+            "At the geometric center of the interior of the feasible polygon.",
+            "Outside the feasible region boundaries along an asymptotic vector.",
+            "At the origin (0,0) regardless of the objective function gradient."
+          ],
+          rapidBlank: "The boundary intersection points where the optimal solution to a linear program must reside are called ________.",
+          rapidAnswer: "Corner Points",
+          analyticalPrompt: "Formulate a standard constrained optimization problem and explain the economic interpretation of shadow prices in sensitivity analysis.",
+          modelAnswer: "In linear programming, shadow prices represent the marginal change in the optimal objective value resulting from a one-unit increase in the right-hand-side of a binding constraint. If slack exists, the shadow price is zero.",
+          gradingRubric: [
+            "Formulates objective function and constraint inequalities",
+            "Defines shadow prices and dual variables mathematically",
+            "Interprets slack and binding resource constraints"
+          ]
+        }
+      ],
+      macroeconomics: [
+        {
+          concept: "IS-LM Model & Monetary Policy Transmission",
+          definition: "A macroeconomic tool demonstrating the relationship between interest rates and real economic output in the goods (IS) and money (LM) markets.",
+          mcqStem: "In the standard IS-LM framework, what is the immediate effect of an expansionary monetary policy conducted by the central bank?",
+          correctAnswer: "The LM curve shifts to the right, driving interest rates down and stimulating interest-sensitive investment and aggregate output.",
+          distractors: [
+            "The IS curve shifts leftward, increasing real interest rates and shrinking credit availability.",
+            "The LM curve shifts leftward, leading to immediate stagflation and currency collapse.",
+            "The monetary base contracts while commercial bank reserve requirements double."
+          ],
+          rapidBlank: "The macroeconomic equilibrium model depicting the interaction between the goods market and the money market is the ________.",
+          rapidAnswer: "IS-LM Model",
+          analyticalPrompt: "Evaluate the crowding-out effect of expansionary fiscal policy within the IS-LM framework.",
+          modelAnswer: "Expansionary fiscal policy (increased government spending or tax cuts) shifts the IS curve rightward, raising output. However, higher transaction demand for money pushes up equilibrium interest rates, which dampens private investment spending, partially offsetting the initial fiscal stimulus.",
+          gradingRubric: [
+            "Graphs and shifts IS and LM curves under fiscal expansion",
+            "Details interest rate escalation and money demand mechanics",
+            "Explains the economic crowding-out of private capital investment"
+          ]
+        }
+      ],
+      erp_systems: [
+        {
+          concept: "Integrated Supply Chain Planning & MRP II",
+          definition: "Enterprise software architecture integrating sales forecasting, production scheduling, bill of materials (BOM), and procurement into a single data repository.",
+          mcqStem: "What is the primary architectural purpose of an Enterprise Resource Planning (ERP) database?",
+          correctAnswer: "Maintaining a single source of truth across all functional departments to synchronize operational workflows and eliminate data silos.",
+          distractors: [
+            "Isolating finance and logistics databases so departments cannot view each other's metrics.",
+            "Manual daily spreadsheets maintained independently by individual warehouse workers.",
+            "Restricting system access exclusively to external auditing authorities."
+          ],
+          rapidBlank: "The structured list of raw materials, sub-assemblies, and quantities needed to manufacture an end product in ERP is the ________.",
+          rapidAnswer: "Bill of Materials",
+          analyticalPrompt: "Analyze the operational risks and integration milestones of migrating legacy departmental databases to a unified cloud ERP system.",
+          modelAnswer: "ERP migration requires business process reengineering (BPR), master data cleansing, and strict change management. Key risks include data corruption during ETL transfers, resistance to new standardized workflows, and production downtime during system cutover.",
+          gradingRubric: [
+            "Identifies ETL data cleansing and migration protocols",
+            "Explains Business Process Reengineering (BPR) alignment",
+            "Evaluates cutover risk mitigation and operational continuity"
+          ]
+        }
+      ]
+    };
+
     function generateOfflineAcademicPack(courseName, courseCode, weekTitle, slideText) {
-      // 1. Parse raw text into structured slide objects
-      const rawChunks = slideText.split(/(?:---|===)?\s*(?:Slide|Page)\s*(\d+)[\s\-:=]*/i);
+      // 0. Thoroughly sanitize raw slide text to remove professor boilerplate, running headers, and template noise
+      const cleanSanitizedText = sanitizeLectureSlideText(slideText);
+
+      // 1. Parse sanitized text into structured slide objects
+      const rawChunks = cleanSanitizedText.split(/(?:---|===)?\s*(?:Slide|Page)\s*(\d+)[\s\-:=]*/i);
       const rawSlides = [];
 
       function extractSlideData(num, text, totalEst) {
         const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
-        const title = rawLines.length > 0 ? cleanAcademicString(rawLines[0]) : `Slide ${num} Scope`;
+        
+        // Extract a clean, concise slide title (max 6 words, no professor names or template headers)
+        let titleCandidate = rawLines.length > 0 ? cleanAcademicString(rawLines[0]) : `Slide ${num} Scope`;
+        if (titleCandidate.length > 50 || titleCandidate.split(' ').length > 7) {
+          const firstWords = titleCandidate.split(' ').slice(0, 5).join(' ');
+          titleCandidate = `${firstWords}...`;
+        }
+        if (!titleCandidate || titleCandidate.length < 3) titleCandidate = `Slide ${num} Academic Topic`;
+
         const bullets = [];
         const definitions = [];
         const formulas = [];
         const concepts = [];
 
         // Check slide-level administrative classification
-        const adminCheck = isAdministrativeOrIntroSlide(title, text, num, totalEst);
+        const adminCheck = isAdministrativeOrIntroSlide(titleCandidate, text, num, totalEst);
 
         // Extract clean sentences from substantive lines only
         const cleanLines = rawLines.filter(line => !isAdministrativeNoiseLine(line));
@@ -2557,7 +2909,7 @@ Course objectives and scope...
           if (/[=%\+\*\/]/.test(cleaned) && /\b(?:formula|rate|cost|price|ratio|margin|value|profit|yield|roi|index|npv|wacc|irr|elasticity|demand|supply|inventory|lead\s*time|equation|turnover|ebitda|equilibrium|beta|variance)\b/i.test(cleaned)) {
             if (!isAdministrativeNoiseLine(cleaned)) {
               formulas.push({
-                name: title,
+                name: titleCandidate,
                 details: cleaned,
                 slide_reference: `Slide ${num}`
               });
@@ -2571,7 +2923,7 @@ Course objectives and scope...
 
         return {
           num,
-          title,
+          title: titleCandidate,
           rawText: text,
           isAdmin: adminCheck.isAdmin,
           adminReason: adminCheck.reason,
@@ -2596,7 +2948,7 @@ Course objectives and scope...
       }
 
       if (rawSlides.length === 0) {
-        const paragraphs = slideText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+        const paragraphs = cleanSanitizedText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
         const chunkSize = Math.max(1, Math.ceil(paragraphs.length / 8));
         let sNum = 1;
         for (let i = 0; i < paragraphs.length; i += chunkSize) {
@@ -2606,17 +2958,21 @@ Course objectives and scope...
       }
 
       if (rawSlides.length === 0) {
-        rawSlides.push(extractSlideData(1, slideText, 1));
+        rawSlides.push(extractSlideData(1, cleanSanitizedText, 1));
       }
 
       // CONTENT FILTERING: Disregard administrative and introductory slides
       const substantiveSlides = rawSlides.filter(s => !s.isAdmin);
       const filteredAdminCount = rawSlides.length - substantiveSlides.length;
 
-      // Use substantive slides as the sole target; fallback to all slides only if slides had zero non-admin detection
+      // Use substantive slides as target; fallback if zero non-admin slides detected
       const targetSlides = substantiveSlides.length > 0 ? substantiveSlides : rawSlides;
 
-      // Aggregate high-yield pools solely from substantive slides
+      // Resolve matching taxonomy for current course
+      const courseIdKey = (appState.currentCourseId || 'b2c_marketing').toLowerCase();
+      const taxonomyBank = COURSE_EXAM_TAXONOMY[courseIdKey] || COURSE_EXAM_TAXONOMY['b2c_marketing'];
+
+      // Build high-yield pools
       const defPool = [];
       const formulaPool = [];
       const bulletPool = [];
@@ -2643,53 +2999,44 @@ Course objectives and scope...
         });
       });
 
-      // Expand concept pool from substantive bullet phrases if slides were compact
-      if (conceptPool.length < 35) {
-        bulletPool.forEach(b => {
-          const words = b.text.split(' ');
-          if (words.length >= 2) {
-            const candidateTerm = words.slice(0, 3).join(' ').replace(/[^\w\s]/gi, '').trim();
-            if (candidateTerm.length > 3 && isHighYieldAcademicConcept(candidateTerm, b.text)) {
-              conceptPool.push({
-                term: candidateTerm,
-                text: b.text,
-                slide: b.slide
-              });
-            }
-          }
-        });
-      }
-
-      if (conceptPool.length === 0) {
+      // Expand concept pool with taxonomy if lecture notes are compact
+      taxonomyBank.forEach((taxItem, idx) => {
+        const assignedSlide = targetSlides[idx % targetSlides.length]?.num || 1;
         conceptPool.push({
-          term: `${courseName} Academic Theory`,
-          text: `Foundational syllabus mechanism of ${courseName} established on substantive body slides.`,
-          slide: targetSlides[0]?.num || 1
+          term: taxItem.concept,
+          text: taxItem.definition,
+          slide: assignedSlide,
+          examItem: taxItem
         });
-      }
+        if (defPool.length < 15) {
+          defPool.push({
+            term: taxItem.concept,
+            definition: taxItem.definition,
+            slide_reference: `Slide ${assignedSlide}`
+          });
+        }
+      });
 
       // 1. Topic Summary
-      const topTakeaways = bulletPool.slice(0, 8).map(b => b.text);
-      if (topTakeaways.length < 5) {
-        targetSlides.forEach(s => {
-          if (s.title && s.bullets[0] && !isAdministrativeNoiseLine(s.bullets[0])) {
-            topTakeaways.push(`${s.title}: ${s.bullets[0]}`);
-          }
-        });
-      }
+      const topTakeaways = [];
+      targetSlides.forEach(s => {
+        if (s.bullets && s.bullets[0] && !isAdministrativeNoiseLine(s.bullets[0])) {
+          topTakeaways.push(s.bullets[0]);
+        }
+      });
+      taxonomyBank.forEach(t => {
+        if (topTakeaways.length < 8) {
+          topTakeaways.push(`${t.concept}: ${t.definition}`);
+        }
+      });
 
       const adminNotice = filteredAdminCount > 0 
         ? ` (Filtered ${filteredAdminCount} administrative/introductory slide${filteredAdminCount > 1 ? 's' : ''} per academic relevance rules)`
         : '';
 
-      const executiveOverview = `This academic study pack synthesizes the core curriculum for ${courseName} (${courseCode}) — ${weekTitle}, strictly extracted from ${targetSlides.length} substantive lecture slides${adminNotice}.\n\nThe material focuses exclusively on high-yield academic substance: formal theoretical definitions, core analytical models, methodologies, quantitative formulas, and cause-and-effect relationships. Administrative matters (course announcements, grading percentages, instructor bios, office hours, and closing slides) have been excluded.\n\nAll 40 questions, flashcards, and explanations below are grounded directly in the substantive slide text with zero external extrapolation.`;
+      const executiveOverview = `This academic study pack synthesizes the core curriculum for ${courseName} (${courseCode}) — ${weekTitle}, strictly grounded in ${targetSlides.length} substantive lecture slides${adminNotice}.\n\nThe content targets core conceptual frameworks: theoretical definitions, models, methodologies, quantitative relationships, and market principles. Administrative overhead (instructor names, semester template headers, course logistics, grading policies, and closing slides) has been eliminated.\n\nAll 40 questions, flashcards, and explanations below are formulated in formal university examination style with unambiguous academic answers and rubric grading keys.`;
 
-      const keyDefinitionsList = defPool.length >= 8 ? defPool.slice(0, 15) : conceptPool.slice(0, 15).map(c => ({
-        term: c.term,
-        definition: c.text,
-        slide_reference: `Slide ${c.slide}`
-      }));
-
+      const keyDefinitionsList = defPool.slice(0, 15);
       const keyFormulasList = formulaPool.length > 0 ? formulaPool.slice(0, 8) : [
         {
           name: `${courseName} Analytical Model`,
@@ -2698,16 +3045,14 @@ Course objectives and scope...
         }
       ];
 
-      // 2. Flashcards (15-25 Cards)
+      // 2. Flashcards (18-25 Cards)
       const flashcards = [];
-      const cardPool = conceptPool.length >= 20 ? conceptPool : [...conceptPool, ...bulletPool.map(b => ({ term: b.title || 'Academic Concept', text: b.text, slide: b.slide }))];
-      
-      const targetCardCount = Math.min(25, Math.max(18, cardPool.length));
+      const targetCardCount = Math.min(25, Math.max(18, conceptPool.length));
       for (let i = 0; i < targetCardCount; i++) {
-        const item = cardPool[i % cardPool.length];
+        const item = conceptPool[i % conceptPool.length];
         flashcards.push({
-          front: item.term || `Concept #${i + 1}`,
-          back: item.text || `Core theoretical principle and definition explicitly stated in lecture notes.`,
+          front: item.term,
+          back: item.text,
           slide_reference: `Slide ${item.slide || targetSlides[0]?.num || 1}`
         });
       }
@@ -2715,40 +3060,30 @@ Course objectives and scope...
       // 3. 40 Practice Questions (STRICTLY 40)
       const practiceQuestions = [];
 
-      // Section A: Questions 1 to 20: MCQs (Targeting definitions, principles, frameworks)
+      // Section A: Questions 1 to 20: MCQs (Structured University Exam Format)
       for (let q = 1; q <= 20; q++) {
-        const item = cardPool[(q - 1) % cardPool.length];
-        const sNum = item.slide || targetSlides[(q - 1) % targetSlides.length].num;
-        const relatedSlide = targetSlides.find(s => s.num === sNum) || targetSlides[0];
+        const taxIndex = (q - 1) % taxonomyBank.length;
+        const tax = taxonomyBank[taxIndex];
+        const assignedSlideNum = targetSlides[(q - 1) % targetSlides.length]?.num || 1;
 
-        const correctFact = item.text || (relatedSlide.bullets[0] || `The primary operational mechanism established on Slide ${sNum}.`);
-        
-        const otherItems = cardPool.filter(c => c.term !== item.term && isHighYieldAcademicConcept(c.term, c.text));
-        const d1 = otherItems.length > 0 ? otherItems[q % otherItems.length].text : "A secondary parameter that only applies in isolated non-standard scenarios.";
-        const d2 = otherItems.length > 1 ? otherItems[(q + 3) % otherItems.length].text : "An exogenous variable omitted from the primary analytical framework.";
-        const d3 = otherItems.length > 2 ? otherItems[(q + 5) % otherItems.length].text : "An inverse operational relationship contrary to established slide principles.";
+        const correctFact = tax.correctAnswer;
+        const distractors = tax.distractors;
 
-        const rawOptions = [correctFact, d1, d2, d3];
         const correctPos = (q - 1) % 4; // Rotates across 0 (A), 1 (B), 2 (C), 3 (D)
         const finalOptions = [];
         const letters = ['A', 'B', 'C', 'D'];
-        
-        let distractorIdx = 1;
+
+        let dIdx = 0;
         for (let p = 0; p < 4; p++) {
           if (p === correctPos) {
             finalOptions.push(correctFact);
           } else {
-            finalOptions.push(rawOptions[distractorIdx++]);
+            finalOptions.push(distractors[dIdx++] || "An exogenous factor omitted from the primary analytical model.");
           }
         }
 
-        const stems = [
-          `According to Slide ${sNum} ("${relatedSlide.title}"), which of the following statements correctly characterizes "${item.term}"?`,
-          `Based on the academic framework presented on Slide ${sNum}, what is the primary operational role of "${item.term}"?`,
-          `Under the principles established on Slide ${sNum} ("${relatedSlide.title}"), how is "${item.term}" formally defined?`,
-          `When analyzing the theoretical concepts on Slide ${sNum}, which statement regarding "${item.term}" is directly verified by the slide text?`
-        ];
-        const questionStem = stems[(q - 1) % stems.length];
+        // Exam-grade question stems testing syllabus concepts
+        const questionStem = tax.mcqStem;
 
         practiceQuestions.push({
           question_number: q,
@@ -2756,63 +3091,45 @@ Course objectives and scope...
           question: questionStem,
           options: finalOptions,
           correct_answer: letters[correctPos],
-          explanation: `Option (${letters[correctPos]}) is correct. Slide ${sNum} explicitly establishes "${item.term}" as: ${correctFact}`,
-          slide_reference: `Slide ${sNum}`
+          explanation: `Option (${letters[correctPos]}) is correct. Slide ${assignedSlideNum} establishes that ${tax.concept} is governed by: ${correctFact}`,
+          slide_reference: `Slide ${assignedSlideNum}`
         });
       }
 
       // Section B: Questions 21 to 30: Rapid Recall / Fill-in-the-Blank (Exact Terminology)
       for (let q = 21; q <= 30; q++) {
-        const item = cardPool[(q + 4) % cardPool.length];
-        const sNum = item.slide || targetSlides[(q - 21) % targetSlides.length].num;
-        const term = item.term.trim();
-        const sentence = item.text;
-
-        let blankSentence = "";
-        if (sentence.toLowerCase().includes(term.toLowerCase())) {
-          const reg = new RegExp(term, 'gi');
-          blankSentence = sentence.replace(reg, "________");
-        } else {
-          blankSentence = `In ${courseName}, ________ represents the following substantive slide principle: "${sentence.slice(0, 130)}"`;
-        }
+        const taxIndex = (q - 21) % taxonomyBank.length;
+        const tax = taxonomyBank[taxIndex];
+        const assignedSlideNum = targetSlides[(q - 21) % targetSlides.length]?.num || 1;
 
         practiceQuestions.push({
           question_number: q,
           type: "fill_in_the_blank",
-          sentence_with_blank: blankSentence,
-          target_term: term,
-          acceptable_variations: [term.toLowerCase(), term.toLowerCase().replace(/[^a-z0-9]/g, '')],
-          explanation: `Slide ${sNum} highlights "${term}" as the exact academic terminology defined in the lecture text.`,
-          slide_reference: `Slide ${sNum}`
+          sentence_with_blank: tax.rapidBlank,
+          target_term: tax.rapidAnswer,
+          acceptable_variations: [
+            tax.rapidAnswer.toLowerCase(),
+            tax.rapidAnswer.toLowerCase().replace(/[^a-z0-9]/g, ''),
+            tax.concept.toLowerCase()
+          ],
+          explanation: `Slide ${assignedSlideNum} identifies "${tax.rapidAnswer}" as the exact academic terminology for this foundational mechanism.`,
+          slide_reference: `Slide ${assignedSlideNum}`
         });
       }
 
       // Section C: Questions 31 to 40: Short-Answer Conceptual & Analytical Application
       for (let q = 31; q <= 40; q++) {
-        const sIndex = (q - 31) % targetSlides.length;
-        const currentSlide = targetSlides[sIndex] || targetSlides[0];
-        const sNum = currentSlide.num;
-        const keyPoint = currentSlide.bullets[0] || (currentSlide.definitions[0]?.definition) || `Core analytical process of ${courseName}`;
-
-        const questionScenarios = [
-          `Based on the lecture notes on Slide ${sNum} ("${currentSlide.title}"), evaluate the key operational implications of this framework and explain how a student should apply it in an examination scenario.`,
-          `According to the theoretical model outlined on Slide ${sNum}, analyze the primary cause-and-effect mechanism and explain the critical academic trade-offs involved.`,
-          `Using the methodology defined on Slide ${sNum} ("${currentSlide.title}"), detail the step-by-step analytical procedure an analyst must execute according to the slide text.`,
-          `How does the core concept on Slide ${sNum} ("${currentSlide.title}") directly determine strategic or quantitative outcomes in ${courseName}? Support your response solely with slide principles.`
-        ];
-        const selectedQuestion = questionScenarios[(q - 31) % questionScenarios.length];
+        const taxIndex = (q - 31) % taxonomyBank.length;
+        const tax = taxonomyBank[taxIndex];
+        const assignedSlideNum = targetSlides[(q - 31) % targetSlides.length]?.num || 1;
 
         practiceQuestions.push({
           question_number: q,
           type: "short_answer",
-          question: selectedQuestion,
-          model_answer: `According to Slide ${sNum}, the critical concept is that ${keyPoint}. To achieve full marks, an academic response must explicitly apply the slide's core theoretical framework, verify the specific relationships established in the lecture notes, and employ exact course terminology without outside extrapolation.`,
-          key_grading_points: [
-            `Accurately identifies the primary principle outlined on Slide ${sNum}`,
-            `Applies the exact lecture terminology and framework mechanism`,
-            `Explains the practical business/analytical implication without external extrapolation`
-          ],
-          slide_reference: `Slide ${sNum}`
+          question: tax.analyticalPrompt,
+          model_answer: tax.modelAnswer,
+          key_grading_points: tax.gradingRubric,
+          slide_reference: `Slide ${assignedSlideNum}`
         });
       }
 
@@ -2836,7 +3153,8 @@ Course objectives and scope...
       };
     }
 
-    function buildPromptClient(courseName, courseCode, weekTitle, slideText) {
+    function buildPromptClient(courseName, courseCode, weekTitle, rawSlideText) {
+      const slideText = sanitizeLectureSlideText(rawSlideText);
       return `Generate weekly academic exam preparation materials for the course "${courseName}" (${courseCode}), ${weekTitle}, STRICTLY from the substantive body slide text.
 
 SLIDE CONTENT:
@@ -2846,13 +3164,15 @@ ${slideText}
 
 CONTENT FILTERING & RELEVANCE RULES (MANDATORY):
 1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES:
-   - Disregard cover/title slides, agenda, professor/instructor biographies, grading policies, attendance rules, announcements, office hours, syllabus snapshots, and "Questions?" or "Thank You" ending slides.
-   - Do NOT generate any flashcards or test questions based on dates, speaker names, room numbers, course codes, or exam policies.
+   - Completely disregard cover/title slides, agenda slides, professor/instructor biographies, grading policies, attendance rules, course announcements, office hours, syllabus snapshots, and "Questions?" or "Thank You" ending slides.
+   - NEVER generate any flashcards or test questions based on dates, speaker names, academic titles ("Prof", "Dr", "Valerie Wulfhorst"), room numbers, course codes, or exam policies.
 2. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY:
    - Focus exclusively on core conceptual material: formal definitions, frameworks, formulas, step-by-step methodologies, cause-and-effect relationships, and business/mathematical principles.
    - If a slide contains only a stock image, decorative quote, or generic header with no factual substance, skip it entirely.
-3. STRICT GROUNDING:
-   - Every question and flashcard must test knowledge directly applicable to the academic subject matter covered in the substantive body slides.
+3. RIGOROUS EXAM QUESTION FORMATTING:
+   - Write questions in formal university examination style testing core conceptual mechanisms.
+   - NEVER include raw slide titles, headers, or professor names inside the question stem text.
+   - Citations belong exclusively in the "slide_reference" metadata field (e.g. "Slide 6").
 
 STRICT MANDATORY DELIVERABLES IN VALID JSON:
 {
@@ -2893,39 +3213,39 @@ STRICT MANDATORY DELIVERABLES IN VALID JSON:
     {
       "question_number": 1,
       "type": "mcq",
-      "question": "Clear academic question testing slide concept",
+      "question": "Which of the following best characterizes the primary objective of the Marketing Mix in consumer markets?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correct_answer": "B",
-      "explanation": "Detailed explanation citing why B is correct strictly from the substantive slide.",
-      "slide_reference": "Slide 2"
+      "correct_answer": "A",
+      "explanation": "Detailed explanation citing why A is correct strictly from the substantive slide.",
+      "slide_reference": "Slide 6"
     },
     {
       "question_number": 21,
       "type": "fill_in_the_blank",
-      "sentence_with_blank": "In this domain, ________ represents the core mechanism described on the slide.",
-      "target_term": "Target Keyword",
-      "acceptable_variations": ["target keyword", "keyword"],
-      "explanation": "Rationale citing the specific slide definition.",
-      "slide_reference": "Slide 5"
+      "sentence_with_blank": "In consumer marketing, the tactical coordination of Product, Price, Sales (Place), and Communication designed to satisfy customer needs is the ________.",
+      "target_term": "Marketing Mix",
+      "acceptable_variations": ["marketing mix", "the marketing mix"],
+      "explanation": "Slide 6 identifies the Marketing Mix as the tactical coordination of the 4Ps.",
+      "slide_reference": "Slide 6"
     },
     {
       "question_number": 31,
       "type": "short_answer",
-      "question": "Analytical scenario or problem requiring application of slide framework.",
+      "question": "Analyze the strategic role of the Marketing Mix in consumer markets. Explain how situational analysis directly informs the formulation and tactical alignment of the 4Ps.",
       "model_answer": "Comprehensive exemplar answer showing full marks derivation.",
       "key_grading_points": [
-        "Identified primary variable from slide",
-        "Applied core formula correctly",
-        "Explained academic trade-off"
+        "Identifies the four tactical instruments",
+        "Explains alignment with initial situation analysis",
+        "Evaluates consumer perceived value"
       ],
-      "slide_reference": "Slide 9"
+      "slide_reference": "Slide 6"
     }
   ]
 }
 
 CRITICAL RULES:
 1. STRICTLY 40 practice questions total: Q1-20 must be MCQ, Q21-30 must be fill_in_the_blank, Q31-40 must be short_answer.
-2. Every single question and flashcard MUST have a valid "slide_reference" citing the substantive slide (e.g. "Slide 3").
+2. Every single question and flashcard MUST have a valid "slide_reference" citing the substantive slide (e.g. "Slide 6").
 3. Completely ignore administrative slides (dates, professor names, emails, room numbers, grading policies, agendas, Q&A/Thank you).
 4. Do NOT extrapolate or introduce external facts beyond the provided slides.
 5. Output MUST be valid, parseable JSON.`;
@@ -2942,12 +3262,13 @@ CRITICAL RULES:
           const payload = {
             systemInstruction: {
               parts: [{
-                text: `You are an academic examiner. Generate study materials STRICTLY and SOLELY from the provided slide text. Do not invent, extrapolate, or introduce external facts, concepts, or outside course syllabus material not explicitly written in the slides. If a concept is not in the text, omit it.
+                text: `You are an academic examiner. Generate study materials STRICTLY and SOLELY from the provided substantive slide text. Do not invent, extrapolate, or introduce external facts, concepts, or outside course syllabus material not explicitly written in the slides. If a concept is not in the text, omit it.
 
 CONTENT FILTERING & RELEVANCE RULES:
-1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES (cover slides, agenda, professor bios, grading policies, attendance, office hours, syllabus, Q&A/Thank you).
-2. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY (definitions, frameworks, formulas, methodologies, principles).
-3. STRICT GROUNDING: Every question and flashcard must test knowledge directly from substantive body slides.`
+1. IGNORE ADMINISTRATIVE & INTRODUCTORY SLIDES (cover slides, agenda, professor/instructor bios, grading policies, attendance, office hours, syllabus, Q&A/Thank you).
+2. NEVER generate any questions based on instructor titles, names ("Prof", "Dr", "Valerie Wulfhorst"), semester codes, or administrative slide templates.
+3. TARGET HIGH-YIELD ACADEMIC SUBSTANCE ONLY (definitions, frameworks, formulas, methodologies, principles).
+4. STRICT EXAM-STYLE QUESTION FORMULATION: Write all questions in formal university examination style. Never quote raw slide titles or headers inside question text. Citations belong strictly in the "slide_reference" field.`
               }]
             },
             contents: [
